@@ -49,6 +49,7 @@
 use helix_core::line_ending::str_is_line_ending;
 use helix_core::unicode::width::UnicodeWidthStr;
 use helix_view::graphics::Style;
+use helix_view::icons::Icon;
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -205,6 +206,15 @@ impl<'a> From<&'a str> for Span<'a> {
 impl<'a> From<Cow<'a, str>> for Span<'a> {
     fn from(s: Cow<'a, str>) -> Span<'a> {
         Span::raw(s)
+    }
+}
+
+impl<'a, 'b> From<&'b Icon> for Span<'a> {
+    fn from(icon: &'b Icon) -> Self {
+        Span {
+            content: format!("{}", icon.icon_char).into(),
+            style: icon.style.unwrap_or_default().into(),
+        }
     }
 }
 
@@ -433,6 +443,33 @@ impl<'a> From<Spans<'a>> for Text<'a> {
 impl<'a> From<Vec<Spans<'a>>> for Text<'a> {
     fn from(lines: Vec<Spans<'a>>) -> Text<'a> {
         Text { lines }
+    }
+}
+
+impl<'a> From<Text<'a>> for String {
+    fn from(text: Text<'a>) -> String {
+        String::from(&text)
+    }
+}
+
+impl<'a> From<&Text<'a>> for String {
+    fn from(text: &Text<'a>) -> String {
+        let size = text
+            .lines
+            .iter()
+            .flat_map(|spans| spans.0.iter().map(|span| span.content.len()))
+            .sum::<usize>()
+            + text.lines.len().saturating_sub(1); // for newline after each line
+        let mut output = String::with_capacity(size);
+
+        for spans in &text.lines {
+            for span in &spans.0 {
+                output.push_str(&span.content);
+            }
+            output.push('\n');
+        }
+        output.pop(); // remove extra newline
+        output
     }
 }
 

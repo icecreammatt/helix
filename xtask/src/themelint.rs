@@ -1,6 +1,6 @@
 use crate::path;
 use crate::DynError;
-use helix_view::theme::Loader;
+use helix_loader::toml_names_in_dir;
 use helix_view::theme::Modifier;
 use helix_view::Theme;
 
@@ -156,8 +156,8 @@ pub fn lint(file: String) -> Result<(), DynError> {
         return Ok(());
     }
     let path = path::themes().join(file.clone() + ".toml");
-    let theme = std::fs::read(&path).unwrap();
-    let theme: Theme = toml::from_slice(&theme).expect("Failed to parse theme");
+    let theme = std::fs::read_to_string(&path).unwrap();
+    let theme: Theme = toml::from_str(&theme).expect("Failed to parse theme");
 
     let mut messages: Vec<String> = vec![];
     get_rules().iter().for_each(|lint| match lint {
@@ -178,7 +178,7 @@ pub fn lint(file: String) -> Result<(), DynError> {
 }
 
 pub fn lint_all() -> Result<(), DynError> {
-    let files = Loader::read_names(path::themes().as_path());
+    let files = toml_names_in_dir(path::themes().as_path());
     let files_count = files.len();
     let ok_files_count = files
         .into_iter()

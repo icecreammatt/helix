@@ -102,6 +102,7 @@ The following statusline elements can be configured:
 | `file-line-ending` | The file line endings (CRLF or LF) |
 | `total-line-numbers` | The total line numbers of the opened file |
 | `file-type` | The type of the opened file |
+| `file-type-icon` | The icon representing the language of the open file, or else its file type (see `[editor.icons]` section) |
 | `diagnostics` | The number of warnings and/or errors |
 | `workspace-diagnostics` | The number of warnings and/or errors on workspace |
 | `selections` | The number of active selections |
@@ -115,6 +116,7 @@ The following statusline elements can be configured:
 
 | Key                   | Description                                                 | Default |
 | ---                   | -----------                                                 | ------- |
+| `enable`              | Enables LSP integration. Setting to false will completely disable language servers regardless of language settings.| `true` |
 | `display-messages`    | Display LSP progress messages below statusline[^1]          | `false` |
 | `auto-signature-help` | Enable automatic popup of signature help (parameter hints)  | `true`  |
 | `display-signature-help-docs` | Display docs under signature help popup             | `true`  |
@@ -150,6 +152,8 @@ All git related options are only enabled in a git repository.
 | Key | Description | Default |
 |--|--|---------|
 |`hidden` | Enables ignoring hidden files. | true
+|`follow-links` | Follow symlinks instead of ignoring them | true
+|`deduplicate-links` | Ignore symlinks that point at files already shown in the picker | true
 |`parents` | Enables reading ignore files from parent directories. | true
 |`ignore` | Enables reading `.ignore` files. | true
 |`git-ignore` | Enables reading `.gitignore` files. | true
@@ -216,7 +220,7 @@ Options for rendering whitespace with visible characters. Use `:set whitespace.r
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `render` | Whether to render whitespace. May either be `"all"` or `"none"`, or a table with sub-keys `space`, `tab`, and `newline`. | `"none"` |
+| `render` | Whether to render whitespace. May either be `"all"` or `"none"`, or a table with sub-keys `space`, `nbsp`, `tab`, and `newline`. | `"none"` |
 | `characters` | Literal characters to use when rendering whitespace. Sub-keys may be any of `tab`, `space`, `nbsp`, `newline` or `tabpad` | See example below |
 
 Example
@@ -255,4 +259,89 @@ Example:
 render = true
 character = "╎" # Some characters that work well: "▏", "┆", "┊", "⸽"
 skip-levels = 1
+```
+
+### `[editor.gutters]` Section
+
+For simplicity, `editor.gutters` accepts an array of gutter types, which will
+use default settings for all gutter components.
+
+```toml
+[editor]
+gutters = ["diff", "diagnostics", "line-numbers", "spacer"]
+```
+
+To customize the behavior of gutters, the `[editor.gutters]` section must
+be used. This section contains top level settings, as well as settings for
+specific gutter components as sub-sections.
+
+| Key      | Description                    | Default                                                       |
+| ---      | ---                            | ---                                                           |
+| `layout` | A vector of gutters to display | `["diagnostics", "spacer", "line-numbers", "spacer", "diff"]` |
+
+Example:
+
+```toml
+[editor.gutters]
+layout = ["diff", "diagnostics", "line-numbers", "spacer"]
+```
+
+#### `[editor.gutters.line-numbers]` Section
+
+Options for the line number gutter
+
+| Key         | Description                             | Default |
+| ---         | ---                                     | ---     |
+| `min-width` | The minimum number of characters to use | `3`     |
+
+Example:
+
+```toml
+[editor.gutters.line-numbers]
+min-width = 1
+```
+
+#### `[editor.gutters.diagnotics]` Section
+
+Currently unused
+
+#### `[editor.gutters.diff]` Section
+
+Currently unused
+
+#### `[editor.gutters.spacer]` Section
+
+Currently unused
+
+### `[editor.icons]` Section
+
+Option for displaying icons within the editor.
+
+> Warning: some symbols (such as file-type and symbol-kind icons that you would see in the picker) are not available in the "default" icon set. They usually require a patched font such as [NerdFonts](https://www.nerdfonts.com/) to be installed and configured in your terminal emulator, and the corresponding icon set to be configured in the editor (for example, using `icons = "nerdfonts"` in your configuration file).
+
+| Key                 | Description                                                  | Default |
+| ---                 | ---                                                          | ---     |
+| `picker`            | Whether icons in pickers are enabled.                        | `true`  |
+| `bufferline`        | Whether icons in the buffer line are enabled.                | `true`  |
+| `statusline`        | Whether icons in the status line are enabled.                | `true`  |
+
+### `[editor.soft-wrap]` Section
+
+Options for soft wrapping lines that exceed the view width
+
+| Key                 | Description                                                  | Default |
+| ---                 | ---                                                          | ---     |
+| `enable`            | Whether soft wrapping is enabled.                            | `false` |
+| `max-wrap`          | Maximum free space left at the end of the line.              | `20`    |
+| `max-indent-retain` | Maximum indentation to carry over when soft wrapping a line. | `40`    |
+| `wrap-indicator`    | Text inserted before soft wrapped lines, highlighted with `ui.virtual.wrap` | `↪ `    |
+
+Example:
+
+```toml
+[editor.soft-wrap]
+enable = true
+max-wrap = 25 # increase value to reduce forced mid-word wrapping
+max-indent-retain = 0
+wrap-indicator = ""  # set wrap-indicator to "" to hide it
 ```

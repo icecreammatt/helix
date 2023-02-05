@@ -1,4 +1,5 @@
 mod completion;
+mod document;
 pub(crate) mod editor;
 mod explorer;
 mod fuzzy_match;
@@ -16,10 +17,12 @@ mod text;
 mod tree;
 
 use crate::compositor::{Component, Compositor};
+use crate::filter_picker_entry;
 use crate::job::{self, Callback};
 pub use completion::Completion;
 pub use editor::EditorView;
 pub use explorer::Explorer;
+use helix_view::icons::Icons;
 pub use markdown::Markdown;
 pub use menu::Menu;
 pub use picker::{DynamicPicker, FileLocation, FilePicker, Picker};
@@ -160,11 +163,18 @@ pub fn regex_prompt(
     cx.push_layer(Box::new(prompt));
 }
 
-pub fn file_picker(root: PathBuf, config: &helix_view::editor::Config) -> FilePicker<PathBuf> {
+pub fn file_picker(
+    root: PathBuf,
+    config: &helix_view::editor::Config,
+    icons: &Icons,
+) -> FilePicker<PathBuf> {
     use ignore::{types::TypesBuilder, WalkBuilder};
     use std::time::Instant;
 
     let now = Instant::now();
+
+    let dedup_symlinks = config.file_picker.deduplicate_links;
+    let absolute_root = root.canonicalize().unwrap_or_else(|_| root.clone());
 
     let mut walk_builder = WalkBuilder::new(&root);
     walk_builder
@@ -176,10 +186,7 @@ pub fn file_picker(root: PathBuf, config: &helix_view::editor::Config) -> FilePi
         .git_global(config.file_picker.git_global)
         .git_exclude(config.file_picker.git_exclude)
         .max_depth(config.file_picker.max_depth)
-        // We always want to ignore the .git directory, otherwise if
-        // `ignore` is turned off above, we end up with a lot of noise
-        // in our picker.
-        .filter_entry(|entry| entry.file_name() != ".git");
+        .filter_entry(move |entry| filter_picker_entry(entry, &absolute_root, dedup_symlinks));
 
     // We want to exclude files that the editor can't handle yet
     let mut type_builder = TypesBuilder::new();
@@ -198,14 +205,11 @@ pub fn file_picker(root: PathBuf, config: &helix_view::editor::Config) -> FilePi
     // We want files along with their modification date for sorting
     let files = walk_builder.build().filter_map(|entry| {
         let entry = entry.ok()?;
-
         // This is faster than entry.path().is_dir() since it uses cached fs::Metadata fetched by ignore/walkdir
-        let is_dir = entry.file_type().map_or(false, |ft| ft.is_dir());
-        if is_dir {
-            // Will give a false positive if metadata cannot be read (eg. permission error)
-            None
-        } else {
+        if entry.file_type()?.is_file() {
             Some(entry.into_path())
+        } else {
+            None
         }
     });
 
@@ -225,6 +229,7 @@ pub fn file_picker(root: PathBuf, config: &helix_view::editor::Config) -> FilePi
     FilePicker::new(
         files,
         root,
+        config.icons.picker.then(|| icons),
         move |cx, path: &PathBuf, action| {
             if let Err(e) = cx.editor.open(path, action) {
                 let err = if let Some(err) = e.source() {
@@ -243,12 +248,13 @@ pub mod completers {
     use crate::ui::prompt::Completion;
     use fuzzy_matcher::skim::SkimMatcherV2 as Matcher;
     use fuzzy_matcher::FuzzyMatcher;
+    use helix_loader::toml_names_in_dir;
     use helix_view::document::SCRATCH_BUFFER_NAME;
-    use helix_view::theme;
     use helix_view::{editor::Config, Editor};
     use once_cell::sync::Lazy;
     use std::borrow::Cow;
     use std::cmp::Reverse;
+    use std::path::PathBuf;
 
     pub type Completer = fn(&Editor, &str) -> Vec<Completion>;
 
@@ -284,36 +290,60 @@ pub mod completers {
         names
     }
 
+    fn toml_filenames(dirs: &[PathBuf], additional_names: &[&str], input: &str) -> Vec<Completion> {
+        {
+            let mut names = Vec::<String>::new();
+            dirs.iter()
+                .for_each(|dir| names.extend(toml_names_in_dir(dir)));
+            additional_names
+                .iter()
+                .for_each(|name| names.push(name.to_string()));
+            names.sort();
+            names.dedup();
+
+            let mut names: Vec<_> = names
+                .into_iter()
+                .map(|name| ((0..), Cow::from(name)))
+                .collect();
+
+            let matcher = Matcher::default();
+
+            let mut matches: Vec<_> = names
+                .into_iter()
+                .filter_map(|(_range, name)| {
+                    matcher.fuzzy_match(&name, input).map(|score| (name, score))
+                })
+                .collect();
+
+            matches.sort_unstable_by(|(name1, score1), (name2, score2)| {
+                (Reverse(*score1), name1).cmp(&(Reverse(*score2), name2))
+            });
+            names = matches.into_iter().map(|(name, _)| ((0..), name)).collect();
+
+            names
+        }
+    }
+
     pub fn theme(_editor: &Editor, input: &str) -> Vec<Completion> {
-        let mut names = theme::Loader::read_names(&helix_loader::runtime_dir().join("themes"));
-        names.extend(theme::Loader::read_names(
-            &helix_loader::config_dir().join("themes"),
-        ));
-        names.push("default".into());
-        names.push("base16_default".into());
-        names.sort();
-        names.dedup();
+        toml_filenames(
+            &[
+                helix_loader::runtime_dir().join("themes"),
+                helix_loader::config_dir().join("themes"),
+            ],
+            &["default", "base16_default"],
+            input,
+        )
+    }
 
-        let mut names: Vec<_> = names
-            .into_iter()
-            .map(|name| ((0..), Cow::from(name)))
-            .collect();
-
-        let matcher = Matcher::default();
-
-        let mut matches: Vec<_> = names
-            .into_iter()
-            .filter_map(|(_range, name)| {
-                matcher.fuzzy_match(&name, input).map(|score| (name, score))
-            })
-            .collect();
-
-        matches.sort_unstable_by(|(name1, score1), (name2, score2)| {
-            (Reverse(*score1), name1).cmp(&(Reverse(*score2), name2))
-        });
-        names = matches.into_iter().map(|(name, _)| ((0..), name)).collect();
-
-        names
+    pub fn icons(_editor: &Editor, input: &str) -> Vec<Completion> {
+        toml_filenames(
+            &[
+                helix_loader::runtime_dir().join("icons"),
+                helix_loader::config_dir().join("icons"),
+            ],
+            &["default"],
+            input,
+        )
     }
 
     /// Recursive function to get all keys from this value and add them to vec

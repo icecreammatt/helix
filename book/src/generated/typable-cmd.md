@@ -29,6 +29,7 @@
 | `:cquit`, `:cq` | Quit with exit code (default 1). Accepts an optional integer exit code (:cq 2). |
 | `:cquit!`, `:cq!` | Force quit with exit code (default 1) ignoring unsaved changes. Accepts an optional integer exit code (:cq! 2). |
 | `:theme` | Change the editor theme (show current theme if no name specified). |
+| `:icons` | Change the editor icon flavor (show current flavor if no name specified). |
 | `:clipboard-yank` | Yank main selection into system clipboard. |
 | `:clipboard-yank-join` | Yank joined selections into system clipboard. A separator can be provided as first argument. Default value is newline. |
 | `:primary-clipboard-yank` | Yank main selection into system primary clipboard. |
@@ -43,6 +44,7 @@
 | `:change-current-directory`, `:cd` | Change the current working directory. |
 | `:show-directory`, `:pwd` | Show the current working directory. |
 | `:encoding` | Set encoding. Based on `https://encoding.spec.whatwg.org`. |
+| `:character-info`, `:char` | Get info about the character under the primary cursor. |
 | `:reload` | Discard changes and reload from the source file. |
 | `:reload-all` | Discard changes and reload all documents from the source files. |
 | `:update` | Write changes only if the file has been modified. |

@@ -4,10 +4,8 @@ use crate::job::Job;
 
 use super::*;
 
-use helix_view::{
-    apply_transaction,
-    editor::{Action, CloseError, ConfigEvent},
-};
+use helix_core::encoding;
+use helix_view::editor::{Action, CloseError, ConfigEvent};
 use ui::completers::{self, Completer};
 
 #[derive(Clone)]
@@ -72,7 +70,7 @@ fn open(cx: &mut compositor::Context, args: &[Cow<str>], event: PromptEvent) -> 
             let callback = async move {
                 let call: job::Callback = job::Callback::EditorCompositor(Box::new(
                     move |editor: &mut Editor, compositor: &mut Compositor| {
-                        let picker = ui::file_picker(path, &editor.config());
+                        let picker = ui::file_picker(path, &editor.config(), &editor.icons);
                         compositor.push(Box::new(overlayed(picker)));
                     },
                 ));
@@ -480,7 +478,7 @@ fn set_line_ending(
             }
         }),
     );
-    apply_transaction(&transaction, doc, view);
+    doc.apply(&transaction, view.id);
     doc.append_changes_to_history(view);
 
     Ok(())
@@ -810,6 +808,30 @@ fn theme(
     Ok(())
 }
 
+fn icons(
+    cx: &mut compositor::Context,
+    args: &[Cow<str>],
+    event: PromptEvent,
+) -> anyhow::Result<()> {
+    let true_color = cx.editor.config.load().true_color || crate::true_color();
+    if let PromptEvent::Validate = event {
+        if let Some(flavor_name) = args.first() {
+            let icons = cx
+                .editor
+                .icons_loader
+                .load(flavor_name, &cx.editor.theme, true_color)
+                .with_context(|| "Icons flavor does not exist")?;
+            cx.editor.set_icons(icons);
+        } else {
+            let name = cx.editor.icons.name().to_string();
+
+            cx.editor.set_status(name);
+        }
+    };
+
+    Ok(())
+}
+
 fn yank_main_selection_to_clipboard(
     cx: &mut compositor::Context,
     _args: &[Cow<str>],
@@ -916,6 +938,7 @@ fn replace_selections_with_clipboard_impl(
     cx: &mut compositor::Context,
     clipboard_type: ClipboardType,
 ) -> anyhow::Result<()> {
+    let scrolloff = cx.editor.config().scrolloff;
     let (view, doc) = current!(cx.editor);
 
     match cx.editor.clipboard_provider.get_contents(clipboard_type) {
@@ -925,8 +948,9 @@ fn replace_selections_with_clipboard_impl(
                 (range.from(), range.to(), Some(contents.as_str().into()))
             });
 
-            apply_transaction(&transaction, doc, view);
+            doc.apply(&transaction, view.id);
             doc.append_changes_to_history(view);
+            view.ensure_cursor_in_view(doc, scrolloff);
             Ok(())
         }
         Err(e) => Err(e.context("Couldn't get system clipboard contents")),
@@ -1032,6 +1056,131 @@ fn set_encoding(
         cx.editor.set_status(encoding);
         Ok(())
     }
+}
+
+/// Shows info about the character under the primary cursor.
+fn get_character_info(
+    cx: &mut compositor::Context,
+    _args: &[Cow<str>],
+    event: PromptEvent,
+) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+
+    let (view, doc) = current_ref!(cx.editor);
+    let text = doc.text().slice(..);
+
+    let grapheme_start = doc.selection(view.id).primary().cursor(text);
+    let grapheme_end = graphemes::next_grapheme_boundary(text, grapheme_start);
+
+    if grapheme_start == grapheme_end {
+        return Ok(());
+    }
+
+    let grapheme = text.slice(grapheme_start..grapheme_end).to_string();
+    let encoding = doc.encoding();
+
+    let printable = grapheme.chars().fold(String::new(), |mut s, c| {
+        match c {
+            '\0' => s.push_str("\\0"),
+            '\t' => s.push_str("\\t"),
+            '\n' => s.push_str("\\n"),
+            '\r' => s.push_str("\\r"),
+            _ => s.push(c),
+        }
+
+        s
+    });
+
+    // Convert to Unicode codepoints if in UTF-8
+    let unicode = if encoding == encoding::UTF_8 {
+        let mut unicode = " (".to_owned();
+
+        for (i, char) in grapheme.chars().enumerate() {
+            if i != 0 {
+                unicode.push(' ');
+            }
+
+            unicode.push_str("U+");
+
+            let codepoint: u32 = if char.is_ascii() {
+                char.into()
+            } else {
+                // Not ascii means it will be multi-byte, so strip out the extra
+                // bits that encode the length & mark continuation bytes
+
+                let s = String::from(char);
+                let bytes = s.as_bytes();
+
+                // First byte starts with 2-4 ones then a zero, so strip those off
+                let first = bytes[0];
+                let codepoint = first & (0xFF >> (first.leading_ones() + 1));
+                let mut codepoint = u32::from(codepoint);
+
+                // Following bytes start with 10
+                for byte in bytes.iter().skip(1) {
+                    codepoint <<= 6;
+                    codepoint += u32::from(*byte) & 0x3F;
+                }
+
+                codepoint
+            };
+
+            unicode.push_str(&format!("{codepoint:0>4x}"));
+        }
+
+        unicode.push(')');
+        unicode
+    } else {
+        String::new()
+    };
+
+    // Give the decimal value for ascii characters
+    let dec = if encoding.is_ascii_compatible() && grapheme.len() == 1 {
+        format!(" Dec {}", grapheme.as_bytes()[0])
+    } else {
+        String::new()
+    };
+
+    let hex = {
+        let mut encoder = encoding.new_encoder();
+        let max_encoded_len = encoder
+            .max_buffer_length_from_utf8_without_replacement(grapheme.len())
+            .unwrap();
+        let mut bytes = Vec::with_capacity(max_encoded_len);
+        let mut current_byte = 0;
+        let mut hex = String::new();
+
+        for (i, char) in grapheme.chars().enumerate() {
+            if i != 0 {
+                hex.push_str(" +");
+            }
+
+            let (result, _input_bytes_read) = encoder.encode_from_utf8_to_vec_without_replacement(
+                &char.to_string(),
+                &mut bytes,
+                true,
+            );
+
+            if let encoding::EncoderResult::Unmappable(char) = result {
+                bail!("{char:?} cannot be mapped to {}", encoding.name());
+            }
+
+            for byte in &bytes[current_byte..] {
+                hex.push_str(&format!(" {byte:0>2x}"));
+            }
+
+            current_byte = bytes.len();
+        }
+
+        hex
+    };
+
+    cx.editor
+        .set_status(format!("\"{printable}\"{unicode}{dec} Hex{hex}"));
+
+    Ok(())
 }
 
 /// Reload the [`Document`] from its source file.
@@ -1162,7 +1311,7 @@ fn lsp_workspace_command(
         let callback = async move {
             let call: job::Callback = Callback::EditorCompositor(Box::new(
                 move |_editor: &mut Editor, compositor: &mut Compositor| {
-                    let picker = ui::Picker::new(commands, (), |cx, command, _action| {
+                    let picker = ui::Picker::new(commands, (), None, |cx, command, _action| {
                         execute_lsp_command(cx.editor, command.clone());
                     });
                     compositor.push(Box::new(overlayed(picker)))
@@ -1573,6 +1722,7 @@ fn sort_impl(
     _args: &[Cow<str>],
     reverse: bool,
 ) -> anyhow::Result<()> {
+    let scrolloff = cx.editor.config().scrolloff;
     let (view, doc) = current!(cx.editor);
     let text = doc.text().slice(..);
 
@@ -1596,8 +1746,9 @@ fn sort_impl(
             .map(|(s, fragment)| (s.from(), s.to(), Some(fragment))),
     );
 
-    apply_transaction(&transaction, doc, view);
+    doc.apply(&transaction, view.id);
     doc.append_changes_to_history(view);
+    view.ensure_cursor_in_view(doc, scrolloff);
 
     Ok(())
 }
@@ -1640,7 +1791,7 @@ fn reflow(
         (range.from(), range.to(), Some(reflowed_text))
     });
 
-    apply_transaction(&transaction, doc, view);
+    doc.apply(&transaction, view.id);
     doc.append_changes_to_history(view);
     view.ensure_cursor_in_view(doc, scrolloff);
 
@@ -2033,6 +2184,13 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
             completer: Some(completers::theme),
         },
         TypableCommand {
+            name: "icons",
+            aliases: &[],
+            doc: "Change the editor icon flavor (show current flavor if no name specified).",
+            fun: icons,
+            completer: Some(completers::icons),
+        },
+        TypableCommand {
             name: "clipboard-yank",
             aliases: &[],
             doc: "Yank main selection into system clipboard.",
@@ -2128,6 +2286,13 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
             aliases: &[],
             doc: "Set encoding. Based on `https://encoding.spec.whatwg.org`.",
             fun: set_encoding,
+            completer: None,
+        },
+        TypableCommand {
+            name: "character-info",
+            aliases: &["char"],
+            doc: "Get info about the character under the primary cursor.",
+            fun: get_character_info,
             completer: None,
         },
         TypableCommand {
@@ -2338,7 +2503,7 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
             aliases: &["sh"],
             doc: "Run a shell command",
             fun: run_shell_command,
-            completer: Some(completers::directory),
+            completer: Some(completers::filename),
         },
     ];
 

@@ -11,7 +11,7 @@ use helix_view::{
     document::DocumentSavedEventResult,
     editor::{ConfigEvent, EditorEvent},
     graphics::Rect,
-    theme,
+    icons, theme,
     tree::Layout,
     Align, Editor,
 };
@@ -156,6 +156,24 @@ impl Application {
             })
             .unwrap_or_else(|| theme_loader.default_theme(true_color));
 
+        let icons_loader = std::sync::Arc::new(icons::Loader::new(
+            &helix_loader::config_dir(),
+            &helix_loader::runtime_dir(),
+        ));
+        let icons = config
+            .icons
+            .as_ref()
+            .and_then(|icons| {
+                icons_loader
+                    .load(icons, &theme, true_color)
+                    .map_err(|e| {
+                        log::warn!("failed to load icons `{}` - {}", icons, e);
+                        e
+                    })
+                    .ok()
+            })
+            .unwrap_or_else(|| icons_loader.default(&theme));
+
         let syn_loader = std::sync::Arc::new(syntax::Loader::new(syn_loader_conf));
 
         #[cfg(not(feature = "integration"))]
@@ -171,8 +189,9 @@ impl Application {
         let mut editor = Editor::new(
             area,
             theme_loader.clone(),
+            icons_loader,
             syn_loader.clone(),
-            Box::new(Map::new(Arc::clone(&config), |config: &Config| {
+            Arc::new(Map::new(Arc::clone(&config), |config: &Config| {
                 &config.editor
             })),
         );
@@ -182,6 +201,9 @@ impl Application {
         }));
         let editor_view = Box::new(ui::EditorView::new(Keymaps::new(keys)));
         compositor.push(editor_view);
+
+        editor.set_theme(theme);
+        editor.set_icons(icons);
 
         if args.load_tutor {
             let path = helix_loader::runtime_dir().join("tutor");
@@ -193,7 +215,7 @@ impl Application {
             if first.is_dir() {
                 std::env::set_current_dir(first).context("set current dir")?;
                 editor.new_file(Action::VerticalSplit);
-                let picker = ui::file_picker(".".into(), &config.load().editor);
+                let picker = ui::file_picker(".".into(), &config.load().editor, &editor.icons);
                 compositor.push(Box::new(overlayed(picker)));
             } else {
                 let nr_of_files = args.files.len();
@@ -250,8 +272,6 @@ impl Application {
                 .unwrap_or_else(|_| editor.new_file(Action::VerticalSplit));
         }
 
-        editor.set_theme(theme);
-
         #[cfg(windows)]
         let signals = futures_util::stream::empty();
         #[cfg(not(windows))]
@@ -277,10 +297,6 @@ impl Application {
         Ok(app)
     }
 
-    #[cfg(feature = "integration")]
-    async fn render(&mut self) {}
-
-    #[cfg(not(feature = "integration"))]
     async fn render(&mut self) {
         let mut cx = crate::compositor::Context {
             editor: &mut self.editor,
@@ -309,8 +325,10 @@ impl Application {
         let surface = self.terminal.current_buffer_mut();
 
         self.compositor.render(area, surface, &mut cx);
-
         let (pos, kind) = self.compositor.cursor(area, &self.editor);
+        // reset cursor cache
+        self.editor.cursor_cache.set(None);
+
         let pos = pos.map(|pos| (pos.col as u16, pos.row as u16));
         self.terminal.draw(pos, kind).unwrap();
     }
@@ -395,6 +413,13 @@ impl Application {
         // Update all the relevant members in the editor after updating
         // the configuration.
         self.editor.refresh_config();
+
+        // reset view position in case softwrap was enabled/disabled
+        let scrolloff = self.editor.config().scrolloff;
+        for (view, _) in self.editor.tree.views_mut() {
+            let doc = &self.editor.documents[&view.doc];
+            view.ensure_cursor_in_view(doc, scrolloff)
+        }
     }
 
     /// refresh language config after config change
