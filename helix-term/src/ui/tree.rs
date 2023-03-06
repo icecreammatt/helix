@@ -1062,8 +1062,8 @@ impl<T: TreeViewItem + Clone> TreeView<T> {
                 key!(i @ '0'..='9') => {
                     self.count = i.to_digit(10).unwrap_or(0) as usize + count * 10
                 }
-                key!('k') | key!(Up) | ctrl!('p') => self.move_up(1.max(count)),
-                key!('j') | key!(Down) | ctrl!('n') => self.move_down(1.max(count)),
+                key!('u') | key!(Up) | ctrl!('p') => self.move_up(1.max(count)),
+                key!('e') | key!(Down) | ctrl!('n') => self.move_down(1.max(count)),
                 key!('z') => {
                     self.on_next_key = Some(Box::new(|_, tree, event| match event {
                         key!('z') => tree.align_view_center(),
@@ -1072,10 +1072,10 @@ impl<T: TreeViewItem + Clone> TreeView<T> {
                         _ => {}
                     }));
                 }
-                key!('h') | key!(Left) => self.move_to_parent()?,
-                key!('l') | key!(Right) => self.move_to_children(&filter)?,
-                shift!('H') => self.move_left(1),
-                shift!('L') => self.move_right(1),
+                key!('n') | key!(Left) => self.move_to_parent()?,
+                key!('i') | key!(Right) => self.move_to_children(&filter)?,
+                shift!('N') => self.move_left(1),
+                shift!('I') => self.move_right(1),
                 key!(Enter) | key!('o') => self.on_enter(cx, params, self.selected, &filter)?,
                 ctrl!('d') => self.move_down_half_page(),
                 ctrl!('u') => self.move_up_half_page(),
@@ -1089,8 +1089,8 @@ impl<T: TreeViewItem + Clone> TreeView<T> {
                     }));
                 }
                 key!('/') => self.new_search_prompt(Direction::Forward),
-                key!('n') => self.move_to_next_search_match(),
-                shift!('N') => self.move_to_previous_next_match(),
+                key!('k') => self.move_to_next_search_match(),
+                shift!('K') => self.move_to_previous_next_match(),
                 key!('f') => self.new_filter_prompt(cx),
                 key!(PageDown) => self.move_down_page(),
                 key!(PageUp) => self.move_up_page(),
