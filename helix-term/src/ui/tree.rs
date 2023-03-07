@@ -1111,10 +1111,10 @@ impl<T: TreeViewItem + Clone> TreeView<T> {
                 key!(i @ '0'..='9') => {
                     self.count = i.to_digit(10).unwrap_or(0) as usize + count * 10
                 }
-                shift!('u') => self.move_up(1.max(count)),
-                shift!('e') => self.move_down(1.max(count)),
-                key!('E') | key!(Down) | ctrl!('n') => self.move_to_next_sibling()?,
-                key!('U') | key!(Up) | ctrl!('p') => self.move_to_previous_sibling()?,
+                key!('u') => self.move_up(1.max(count)),
+                key!('e') => self.move_down(1.max(count)),
+                shift!('E') | key!(Down) | ctrl!('n') => self.move_to_next_sibling()?,
+                shift!('U') | key!(Up) | ctrl!('p') => self.move_to_previous_sibling()?,
                 key!('z') => {
                     self.on_next_key = Some(Box::new(|_, tree, event| {
                         match event {
