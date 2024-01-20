@@ -5,9 +5,8 @@ use crate::{
     key,
     keymap::{KeymapResult, Keymaps},
     ui::{
+        document::{render_document, LinePos, TextRenderer},
         text_decorations::{self, Decoration, DecorationManager, InlineDiagnostics},
-        Completion, ProgressSpinners,
-        document::{render_document, LinePos, TextRenderer, TranslatedPosition},
         Completion, Explorer, ProgressSpinners,
     },
 };

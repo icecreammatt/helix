@@ -2,7 +2,6 @@ mod completion;
 mod document;
 pub(crate) mod editor;
 mod explorer;
-mod fuzzy_match;
 mod info;
 pub mod lsp;
 mod markdown;
@@ -14,8 +13,8 @@ mod prompt;
 mod spinner;
 mod statusline;
 mod text;
-mod tree;
 mod text_decorations;
+mod tree;
 
 use crate::compositor::{Component, Compositor};
 use crate::filter_picker_entry;
