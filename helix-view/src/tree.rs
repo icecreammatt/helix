@@ -7,7 +7,7 @@ use slotmap::HopSlotMap;
 pub struct Tree {
     root: ViewId,
     // (container, index inside the container)
-    pub focus: ViewId,
+    pub focus: ViewId
     // fullscreen: bool,
     area: Rect,
 
