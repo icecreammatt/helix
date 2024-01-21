@@ -1,3 +1,4 @@
+use helix_core::graphemes::grapheme_width;
 use std::cmp::min;
 
 use helix_core::doc_formatter::{DocumentFormatter, GraphemeSource, TextFormat};
@@ -62,6 +63,7 @@ pub struct LinePos {
     pub doc_line: usize,
     /// Vertical offset from the top of the inner view area
     pub visual_line: u16,
+    pub offset: ViewPosition,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -86,7 +88,8 @@ pub fn render_document(
     render_text(
         &mut renderer,
         doc.text().slice(..),
-        offset.anchor,
+        // offset.anchor,
+        offset,
         &doc.text_format(viewport.width, Some(theme)),
         doc_annotations,
         syntax_highlight_iter,
@@ -100,7 +103,8 @@ pub fn render_document(
 pub fn render_text<'t>(
     renderer: &mut TextRenderer,
     text: RopeSlice<'t>,
-    anchor: usize,
+    offset: ViewPosition,
+    // anchor: usize,
     text_fmt: &TextFormat,
     text_annotations: &TextAnnotations,
     syntax_highlight_iter: impl Iterator<Item = HighlightEvent>,
@@ -108,19 +112,39 @@ pub fn render_text<'t>(
     theme: &Theme,
     mut decorations: DecorationManager,
 ) {
-    let row_off = visual_offset_from_block(text, anchor, anchor, text_fmt, text_annotations)
-        .0
-        .row;
+    let (
+        Position {
+            row: mut row_off, ..
+        },
+        mut char_pos,
+    ) = visual_offset_from_block(
+        text,
+        offset.anchor,
+        offset.anchor,
+        text_fmt,
+        text_annotations,
+    );
+    row_off += offset.vertical_offset;
+    let row_off = visual_offset_from_block(
+        text,
+        offset.anchor,
+        offset.anchor,
+        text_fmt,
+        text_annotations,
+    )
+    // let offset = visual_offset_from_block(text, anchor, anchor, text_fmt, text_annotations)
+    .0
+    .row;
 
-// <<<<<<< HEAD
-//     let mut formatter =
-//         DocumentFormatter::new_at_prev_checkpoint(text, text_fmt, text_annotations, anchor);
-//     let mut styles = StyleIter {
-// ======
+    // <<<<<<< HEAD
+    //     let mut formatter =
+    //         DocumentFormatter::new_at_prev_checkpoint(text, text_fmt, text_annotations, anchor);
+    //     let mut styles = StyleIter {
+    // ======
     let (mut formatter, mut first_visible_char_idx) =
         DocumentFormatter::new_at_prev_checkpoint(text, text_fmt, text_annotations, offset.anchor);
     let mut syntax_styles = StyleIter {
-// >>>>>>> upstream/master
+        // >>>>>>> upstream/master
         text_style: renderer.text_style,
         active_highlights: Vec::with_capacity(64),
         highlight_iter: syntax_highlight_iter,
@@ -152,12 +176,12 @@ pub fn render_text<'t>(
         let Some(mut grapheme) = formatter.next() else { break };
 
         // skip any graphemes on visual lines before the block start
-// <<<<<<< HEAD
+        // <<<<<<< HEAD
         // if grapheme.visual_pos.row < row_off {
         //     if grapheme.char_idx >= style_span.1 {
         //         style_span = if let Some(style_span) = styles.next() {
         //             style_span
-// =======
+        // =======
         if pos.row < row_off {
             if char_pos >= syntax_style_span.1 {
                 syntax_style_span = if let Some(syntax_style_span) = syntax_styles.next() {
@@ -169,7 +193,7 @@ pub fn render_text<'t>(
             if char_pos >= overlay_style_span.1 {
                 overlay_style_span = if let Some(overlay_style_span) = overlay_styles.next() {
                     overlay_style_span
-// >>>>>>> upstream/master
+                // >>>>>>> upstream/master
                 } else {
                     break;
                 }
@@ -209,10 +233,10 @@ pub fn render_text<'t>(
         }
 
         // acquire the correct grapheme style
-// <<<<<<< HEAD
-//         while grapheme.char_idx >= style_span.1 {
-//             style_span = styles.next().unwrap_or((Style::default(), usize::MAX));
-// =======
+        // <<<<<<< HEAD
+        //         while grapheme.char_idx >= style_span.1 {
+        //             style_span = styles.next().unwrap_or((Style::default(), usize::MAX));
+        // =======
         if char_pos >= syntax_style_span.1 {
             syntax_style_span = syntax_styles
                 .next()
@@ -222,7 +246,7 @@ pub fn render_text<'t>(
             overlay_style_span = overlay_styles
                 .next()
                 .unwrap_or((Style::default(), usize::MAX));
-// >>>>>>> upstream/master
+            // >>>>>>> upstream/master
         }
 
         let (syntax_style, overlay_style) =
@@ -233,23 +257,22 @@ pub fn render_text<'t>(
                 }
                 (style, Style::default())
             } else {
-// <<<<<<< HEAD
-//                 style
-//             }
-//         } else {
-//             style_span.0
-//         };
-//         decorations.decorate_grapheme(renderer, &grapheme);
+                // <<<<<<< HEAD
+                //                 style
+                //             }
+                //         } else {
+                //             style_span.0
+                //         };
+                //         decorations.decorate_grapheme(renderer, &grapheme);
 
-//         let virt = grapheme.is_virtual();
-//         let grapheme_width = renderer.draw_grapheme(
-//             grapheme.raw,
-//             grapheme_style,
-//             virt,
-// =======
+                //         let virt = grapheme.is_virtual();
+                //         let grapheme_width = renderer.draw_grapheme(
+                //             grapheme.raw,
+                //             grapheme_style,
+                //             virt,
+                // =======
                 (syntax_style_span.0, overlay_style_span.0)
             };
-        };
 
         let is_virtual = grapheme.is_virtual();
         renderer.draw_grapheme(
@@ -259,7 +282,7 @@ pub fn render_text<'t>(
                 overlay_style,
             },
             is_virtual,
-// >>>>>>> upstream/master
+            // >>>>>>> upstream/master
             &mut last_line_indent_level,
             &mut is_in_indent_area,
             grapheme.visual_pos,

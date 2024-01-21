@@ -525,13 +525,13 @@ impl Explorer {
 
             let current_item_path = self.tree.current_item()?.path.clone();
             match (&action, event) {
-                (PromptAction::CreateFileOrFolder, key!(Enter)) => {
-                    if line.ends_with(std::path::MAIN_SEPARATOR) {
-                        self.new_folder(line)?
-                    } else {
-                        self.new_file(line)?
-                    }
-                }
+                // (PromptAction::CreateFileOrFolder, key!(Enter)) => {
+                //     if line.ends_with(std::path::MAIN_SEPARATOR) {
+                //         self.new_folder(line)?
+                //     } else {
+                //         self.new_file(line)?
+                //     }
+                // }
                 (PromptAction::RemoveFolder, key) => {
                     if let key!('y') = key {
                         close_documents(current_item_path, cx)?;
@@ -565,23 +565,23 @@ impl Explorer {
         }
     }
 
-    fn new_file(&mut self, path: &str) -> Result<()> {
-        let path = helix_core::path::get_normalized_path(&PathBuf::from(path));
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut fd = std::fs::OpenOptions::new();
-        fd.create_new(true).write(true).open(&path)?;
-        self.tree.refresh()?;
-        self.reveal_file(path)
-    }
+    // fn new_file(&mut self, path: &str) -> Result<()> {
+    //     let path = helix_core::path::get_normalized_path(&PathBuf::from(path));
+    //     if let Some(parent) = path.parent() {
+    //         std::fs::create_dir_all(parent)?;
+    //     }
+    //     let mut fd = std::fs::OpenOptions::new();
+    //     fd.create_new(true).write(true).open(&path)?;
+    //     self.tree.refresh()?;
+    //     self.reveal_file(path)
+    // }
 
-    fn new_folder(&mut self, path: &str) -> Result<()> {
-        let path = helix_core::path::get_normalized_path(&PathBuf::from(path));
-        std::fs::create_dir_all(&path)?;
-        self.tree.refresh()?;
-        self.reveal_file(path)
-    }
+    // fn new_folder(&mut self, path: &str) -> Result<()> {
+    //     let path = helix_core::path::get_normalized_path(&PathBuf::from(path));
+    //     std::fs::create_dir_all(&path)?;
+    //     self.tree.refresh()?;
+    //     self.reveal_file(path)
+    // }
 
     fn toggle_help(&mut self) {
         self.show_help = !self.show_help
@@ -752,7 +752,7 @@ fn render_block(area: Rect, surface: &mut Surface, borders: Borders) -> Rect {
 
 #[cfg(test)]
 mod test_explorer {
-    use crate::compositor::Component;
+    // use crate::compositor::Component;
 
     use super::Explorer;
     use helix_view::graphics::Rect;

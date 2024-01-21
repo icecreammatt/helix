@@ -8,7 +8,7 @@ use helix_core::chars::char_is_word;
 use helix_core::doc_formatter::TextFormat;
 use helix_core::encoding::Encoding;
 use helix_core::syntax::{Highlight, LanguageServerFeature};
-use helix_core::text_annotations::{InlineAnnotation, TextAnnotations};
+use helix_core::text_annotations::InlineAnnotation;
 use helix_lsp::util::lsp_pos_to_pos;
 use helix_vcs::{DiffHandle, DiffProviderRegistry};
 
@@ -1795,14 +1795,14 @@ impl Document {
         &self.diagnostics
     }
 
-    // pub fn shown_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> + DoubleEndedIterator {
-    //     self.diagnostics.iter().filter(|d| self.show_diagnostic(d))
-    // }
+    pub fn shown_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> + DoubleEndedIterator {
+        self.diagnostics.iter().filter(|d| self.show_diagnostic(d))
+    }
 
-    // pub fn show_diagnostic(&self, d: &Diagnostic) -> bool {
-    //     self.language_servers_with_feature(LanguageServerFeature::Diagnostics)
-    //         .any(|ls| ls.id() == d.language_server_id)
-    // }
+    pub fn show_diagnostic(&self, d: &Diagnostic) -> bool {
+        self.language_servers_with_feature(LanguageServerFeature::Diagnostics)
+            .any(|ls| ls.id() == d.language_server_id)
+    }
 
     pub fn replace_diagnostics(
         &mut self,
