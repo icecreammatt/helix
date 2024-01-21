@@ -4,8 +4,9 @@ use crate::{
     Call, Error, OffsetEncoding, Result,
 };
 
-use helix_core::{find_workspace, path, syntax::LanguageServerFeature, ChangeSet, Rope};
+use helix_core::{find_workspace, syntax::LanguageServerFeature, ChangeSet, Rope};
 use helix_loader::{self, VERSION_AND_GIT_HASH};
+use helix_stdx::path;
 use lsp::{
     notification::DidChangeWorkspaceFolders, CodeActionCapabilityResolveSupport,
     DidChangeWorkspaceFoldersParams, OneOf, PositionEncodingKind, WorkspaceFolder,
@@ -68,7 +69,7 @@ impl Client {
         may_support_workspace: bool,
     ) -> bool {
         let (workspace, workspace_is_cwd) = find_workspace();
-        let workspace = path::get_normalized_path(&workspace);
+        let workspace = path::normalize(workspace);
         let root = find_lsp_workspace(
             doc_path
                 .and_then(|x| x.parent().and_then(|x| x.to_str()))
@@ -204,7 +205,7 @@ impl Client {
         let (server_rx, server_tx, initialize_notify) =
             Transport::start(reader, writer, stderr, id, name.clone());
         let (workspace, workspace_is_cwd) = find_workspace();
-        let workspace = path::get_normalized_path(&workspace);
+        let workspace = path::normalize(workspace);
         let root = find_lsp_workspace(
             doc_path
                 .and_then(|x| x.parent().and_then(|x| x.to_str()))
@@ -667,6 +668,7 @@ impl Client {
                 version: Some(String::from(VERSION_AND_GIT_HASH)),
             }),
             locale: None, // TODO
+            work_done_progress_params: lsp::WorkDoneProgressParams::default(),
         };
 
         self.request::<lsp::request::Initialize>(params).await
@@ -969,20 +971,19 @@ impl Client {
     ) -> Option<impl Future<Output = Result<()>>> {
         let capabilities = self.capabilities.get().unwrap();
 
-        let include_text = match &capabilities.text_document_sync {
-            Some(lsp::TextDocumentSyncCapability::Options(lsp::TextDocumentSyncOptions {
-                save: Some(options),
+        let include_text = match &capabilities.text_document_sync.as_ref()? {
+            lsp::TextDocumentSyncCapability::Options(lsp::TextDocumentSyncOptions {
+                save: options,
                 ..
-            })) => match options {
+            }) => match options.as_ref()? {
                 lsp::TextDocumentSyncSaveOptions::Supported(true) => false,
                 lsp::TextDocumentSyncSaveOptions::SaveOptions(lsp_types::SaveOptions {
                     include_text,
                 }) => include_text.unwrap_or(false),
-                // Supported(false)
-                _ => return None,
+                lsp::TextDocumentSyncSaveOptions::Supported(false) => return None,
             },
-            // unsupported
-            _ => return None,
+            // see: https://github.com/microsoft/language-server-protocol/issues/288
+            lsp::TextDocumentSyncCapability::Kind(..) => false,
         };
 
         Some(self.notify::<lsp::notification::DidSaveTextDocument>(

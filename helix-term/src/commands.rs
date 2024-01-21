@@ -60,8 +60,13 @@ use crate::{
 
 use crate::job::{self, Jobs};
 use futures_util::{stream::FuturesUnordered, TryStreamExt};
-use std::{collections::HashMap, fmt, future::Future};
-use std::{collections::HashSet, num::NonZeroUsize};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    future::Future,
+    io::Read,
+    num::NonZeroUsize,
+};
 
 use std::{
     borrow::Cow,
@@ -70,6 +75,7 @@ use std::{
 
 use once_cell::sync::Lazy;
 use serde::de::{self, Deserialize, Deserializer};
+use url::Url;
 
 use grep_regex::RegexMatcherBuilder;
 use grep_searcher::{sinks, BinaryDetection, SearcherBuilder};
@@ -331,9 +337,9 @@ impl MappableCommand {
         goto_implementation, "Goto implementation",
         goto_file_start, "Goto line number <n> else file start",
         goto_file_end, "Goto file end",
-        goto_file, "Goto files in selection",
-        goto_file_hsplit, "Goto files in selection (hsplit)",
-        goto_file_vsplit, "Goto files in selection (vsplit)",
+        goto_file, "Goto files/URLs in selections",
+        goto_file_hsplit, "Goto files in selections (hsplit)",
+        goto_file_vsplit, "Goto files in selections (vsplit)",
         goto_reference, "Goto references",
         goto_window_top, "Goto window top",
         goto_window_center, "Goto window center",
@@ -792,7 +798,7 @@ fn goto_buffer(editor: &mut Editor, direction: Direction) {
             let iter = editor.documents.keys();
             let mut iter = iter.rev().skip_while(|id| *id != &current);
             iter.next(); // skip current item
-            iter.next().or_else(|| editor.documents.keys().rev().next())
+            iter.next().or_else(|| editor.documents.keys().next_back())
         }
     }
     .unwrap();
@@ -1193,10 +1199,55 @@ fn goto_file_impl(cx: &mut Context, action: Action) {
                 .to_string(),
         );
     }
+
     for sel in paths {
         let p = sel.trim();
-        if !p.is_empty() {
-            let path = &rel_path.join(p);
+        if p.is_empty() {
+            continue;
+        }
+
+        if let Ok(url) = Url::parse(p) {
+            return open_url(cx, url, action);
+        }
+
+        let path = &rel_path.join(p);
+        if path.is_dir() {
+            let picker = ui::file_picker(path.into(), &cx.editor.config());
+            cx.push_layer(Box::new(overlaid(picker)));
+        } else if let Err(e) = cx.editor.open(path, action) {
+            cx.editor.set_error(format!("Open file failed: {:?}", e));
+        }
+    }
+}
+
+/// Opens the given url. If the URL points to a valid textual file it is open in helix.
+//  Otherwise, the file is open using external program.
+fn open_url(cx: &mut Context, url: Url, action: Action) {
+    let doc = doc!(cx.editor);
+    let rel_path = doc
+        .relative_path()
+        .map(|path| path.parent().unwrap().to_path_buf())
+        .unwrap_or_default();
+
+    if url.scheme() != "file" {
+        return cx.jobs.callback(crate::open_external_url_callback(url));
+    }
+
+    let content_type = std::fs::File::open(url.path()).and_then(|file| {
+        // Read up to 1kb to detect the content type
+        let mut read_buffer = Vec::new();
+        let n = file.take(1024).read_to_end(&mut read_buffer)?;
+        Ok(content_inspector::inspect(&read_buffer[..n]))
+    });
+
+    // we attempt to open binary files - files that can't be open in helix - using external
+    // program as well, e.g. pdf files or images
+    match content_type {
+        Ok(content_inspector::ContentType::BINARY) => {
+            cx.jobs.callback(crate::open_external_url_callback(url))
+        }
+        Ok(_) | Err(_) => {
+            let path = &rel_path.join(url.path());
             if path.is_dir() {
                 let picker = ui::file_picker(path.into(), &cx.editor.config());
                 cx.push_layer(Box::new(overlaid(picker)));
@@ -1255,7 +1306,7 @@ fn extend_next_long_word_end(cx: &mut Context) {
     extend_word_impl(cx, movement::move_next_long_word_end)
 }
 
-/// Separate branch to find_char designed only for <ret> char.
+/// Separate branch to find_char designed only for `<ret>` char.
 //
 // This is necessary because the one document can have different line endings inside. And we
 // cannot predict what character to find when <ret> is pressed. On the current line it can be `lf`
@@ -2122,7 +2173,7 @@ fn global_search(cx: &mut Context) {
         type Data = Option<PathBuf>;
 
         fn format(&self, current_path: &Self::Data) -> Row {
-            let relative_path = helix_core::path::get_relative_path(&self.path)
+            let relative_path = helix_stdx::path::get_relative_path(&self.path)
                 .to_string_lossy()
                 .into_owned();
             if current_path
@@ -2171,7 +2222,7 @@ fn global_search(cx: &mut Context) {
                 .case_smart(smart_case)
                 .build(regex.as_str())
             {
-                let search_root = helix_loader::current_working_dir();
+                let search_root = helix_stdx::env::current_working_dir();
                 if !search_root.exists() {
                     cx.editor
                         .set_error("Current working directory does not exist");
@@ -2684,7 +2735,7 @@ fn file_picker_in_current_buffer_directory(cx: &mut Context) {
 }
 
 fn file_picker_in_current_directory(cx: &mut Context) {
-    let cwd = helix_loader::current_working_dir();
+    let cwd = helix_stdx::env::current_working_dir();
     if !cwd.exists() {
         cx.editor
             .set_error("Current working directory does not exist");
@@ -2755,7 +2806,7 @@ fn buffer_picker(cx: &mut Context) {
             let path = self
                 .path
                 .as_deref()
-                .map(helix_core::path::get_relative_path);
+                .map(helix_stdx::path::get_relative_path);
             let path = match path.as_deref().and_then(Path::to_str) {
                 Some(path) => path,
                 None => SCRATCH_BUFFER_NAME,
@@ -2785,7 +2836,7 @@ fn buffer_picker(cx: &mut Context) {
         .editor
         .documents
         .values()
-        .map(|doc| new_meta(doc))
+        .map(new_meta)
         .collect::<Vec<BufferMeta>>();
 
     // mru
@@ -2822,7 +2873,7 @@ fn jumplist_picker(cx: &mut Context) {
             let path = self
                 .path
                 .as_deref()
-                .map(helix_core::path::get_relative_path);
+                .map(helix_stdx::path::get_relative_path);
             let path = match path.as_deref().and_then(Path::to_str) {
                 Some(path) => path,
                 None => SCRATCH_BUFFER_NAME,
@@ -3034,6 +3085,7 @@ fn insert_with_indent(cx: &mut Context, cursor_fallback: IndentFallbackPos) {
             let indent = indent::indent_for_newline(
                 language_config,
                 syntax,
+                &doc.config.load().indent_heuristic,
                 &doc.indent_style,
                 tab_width,
                 text,
@@ -3162,6 +3214,7 @@ fn open(cx: &mut Context, open: Open) {
         let indent = indent::indent_for_newline(
             doc.language_config(),
             doc.syntax(),
+            &doc.config.load().indent_heuristic,
             &doc.indent_style,
             doc.tab_width(),
             text,
@@ -3329,7 +3382,7 @@ fn exit_select_mode(cx: &mut Context) {
 
 fn goto_first_diag(cx: &mut Context) {
     let (view, doc) = current!(cx.editor);
-    let selection = match doc.shown_diagnostics().next() {
+    let selection = match doc.diagnostics().first() {
         Some(diag) => Selection::single(diag.range.start, diag.range.end),
         None => return,
     };
@@ -3338,7 +3391,7 @@ fn goto_first_diag(cx: &mut Context) {
 
 fn goto_last_diag(cx: &mut Context) {
     let (view, doc) = current!(cx.editor);
-    let selection = match doc.shown_diagnostics().last() {
+    let selection = match doc.diagnostics().last() {
         Some(diag) => Selection::single(diag.range.start, diag.range.end),
         None => return,
     };
@@ -3354,9 +3407,10 @@ fn goto_next_diag(cx: &mut Context) {
         .cursor(doc.text().slice(..));
 
     let diag = doc
-        .shown_diagnostics()
+        .diagnostics()
+        .iter()
         .find(|diag| diag.range.start > cursor_pos)
-        .or_else(|| doc.shown_diagnostics().next());
+        .or_else(|| doc.diagnostics().first());
 
     let selection = match diag {
         Some(diag) => Selection::single(diag.range.start, diag.range.end),
@@ -3374,10 +3428,11 @@ fn goto_prev_diag(cx: &mut Context) {
         .cursor(doc.text().slice(..));
 
     let diag = doc
-        .shown_diagnostics()
+        .diagnostics()
+        .iter()
         .rev()
         .find(|diag| diag.range.start < cursor_pos)
-        .or_else(|| doc.shown_diagnostics().last());
+        .or_else(|| doc.diagnostics().last());
 
     let selection = match diag {
         // NOTE: the selection is reversed because we're jumping to the
@@ -3701,6 +3756,7 @@ pub mod insert {
                 let indent = indent::indent_for_newline(
                     doc.language_config(),
                     doc.syntax(),
+                    &doc.config.load().indent_heuristic,
                     &doc.indent_style,
                     doc.tab_width(),
                     text,
@@ -4163,9 +4219,13 @@ fn replace_with_yanked(cx: &mut Context) {
 }
 
 fn replace_with_yanked_impl(editor: &mut Editor, register: char, count: usize) {
-    let Some(values) = editor.registers
+    let Some(values) = editor
+        .registers
         .read(register, editor)
-        .filter(|values| values.len() > 0) else { return };
+        .filter(|values| values.len() > 0)
+    else {
+        return;
+    };
     let values: Vec<_> = values.map(|value| value.to_string()).collect();
 
     let (view, doc) = current!(editor);
@@ -4202,7 +4262,9 @@ fn replace_selections_with_primary_clipboard(cx: &mut Context) {
 }
 
 fn paste(editor: &mut Editor, register: char, pos: Paste, count: usize) {
-    let Some(values) = editor.registers.read(register, editor) else { return };
+    let Some(values) = editor.registers.read(register, editor) else {
+        return;
+    };
     let values: Vec<_> = values.map(|value| value.to_string()).collect();
 
     let (view, doc) = current!(editor);
@@ -4372,10 +4434,9 @@ fn join_selections_impl(cx: &mut Context, select_space: bool) {
     use movement::skip_while;
     let (view, doc) = current!(cx.editor);
     let text = doc.text();
-    let slice = doc.text().slice(..);
+    let slice = text.slice(..);
 
     let mut changes = Vec::new();
-    let fragment = Tendril::from(" ");
 
     for selection in doc.selection(view.id) {
         let (start, mut end) = selection.line_range(slice);
@@ -4391,9 +4452,13 @@ fn join_selections_impl(cx: &mut Context, select_space: bool) {
             let mut end = text.line_to_char(line + 1);
             end = skip_while(slice, end, |ch| matches!(ch, ' ' | '\t')).unwrap_or(end);
 
-            // need to skip from start, not end
-            let change = (start, end, Some(fragment.clone()));
-            changes.push(change);
+            let separator = if end == line_end_char_index(&slice, line + 1) {
+                // the joining line contains only space-characters => don't include a whitespace when joining
+                None
+            } else {
+                Some(Tendril::from(" "))
+            };
+            changes.push((start, end, separator));
         }
     }
 
@@ -4404,9 +4469,6 @@ fn join_selections_impl(cx: &mut Context, select_space: bool) {
 
     changes.sort_unstable_by_key(|(from, _to, _text)| *from);
     changes.dedup();
-
-    // TODO: joining multiple empty lines should be replaced by a single space.
-    // need to merge change ranges that touch
 
     // select inserted spaces
     let transaction = if select_space {
@@ -4419,9 +4481,9 @@ fn join_selections_impl(cx: &mut Context, select_space: bool) {
             })
             .collect();
         let selection = Selection::new(ranges, 0);
-        Transaction::change(doc.text(), changes.into_iter()).with_selection(selection)
+        Transaction::change(text, changes.into_iter()).with_selection(selection)
     } else {
-        Transaction::change(doc.text(), changes.into_iter())
+        Transaction::change(text, changes.into_iter())
     };
 
     doc.apply(&transaction, view.id);
@@ -5587,12 +5649,18 @@ fn shell(cx: &mut compositor::Context, cmd: &str, behavior: &ShellBehavior) {
         };
 
         // These `usize`s cannot underflow because selection ranges cannot overlap.
-        // Once the MSRV is 1.66.0 (mixed_integer_ops is stabilized), we can use checked
-        // arithmetic to assert this.
-        let anchor = (to as isize + offset - deleted_len as isize) as usize;
+        let anchor = to
+            .checked_add_signed(offset)
+            .expect("Selection ranges cannot overlap")
+            .checked_sub(deleted_len)
+            .expect("Selection ranges cannot overlap");
         let new_range = Range::new(anchor, anchor + output_len).with_direction(range.direction());
         ranges.push(new_range);
-        offset = offset + output_len as isize - deleted_len as isize;
+        offset = offset
+            .checked_add_unsigned(output_len)
+            .expect("Selection ranges cannot overlap")
+            .checked_sub_unsigned(deleted_len)
+            .expect("Selection ranges cannot overlap");
 
         changes.push((from, to, Some(output)));
     }
