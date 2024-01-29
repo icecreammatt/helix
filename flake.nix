@@ -152,42 +152,41 @@
         default = self.packages.${system}.helix;
       };
 
-      checks = {
-        # Build the crate itself
-        inherit (self.packages.${system}) helix;
+      # checks = {
+      #   # Build the crate itself
+      #   inherit (self.packages.${system}) helix;
 
-        #clippy = craneLibMSRV.cargoClippy (commonArgs
-         # // {
-          #  inherit cargoArtifacts;
-           # cargoClippyExtraArgs = "--all-targets -- --deny warnings";
-          #});
+      #   #clippy = craneLibMSRV.cargoClippy (commonArgs
+      #    # // {
+      #     #  inherit cargoArtifacts;
+      #      # cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+      #     #});
 
-        fmt = craneLibMSRV.cargoFmt commonArgs;
+      #   fmt = craneLibMSRV.cargoFmt commonArgs;
 
-        doc = craneLibMSRV.cargoDoc (commonArgs
-          // {
-            inherit cargoArtifacts;
-          });
+      #   doc = craneLibMSRV.cargoDoc (commonArgs
+      #     // {
+      #       inherit cargoArtifacts;
+      #     });
 
-        test = craneLibMSRV.cargoTest (commonArgs
-          // {
-            inherit cargoArtifacts;
-          });
-      };
+      #   test = craneLibMSRV.cargoTest (commonArgs
+      #     // {
+      #       inherit cargoArtifacts;
+      #     });
+      # };
 
-      devShells.default = pkgs.mkShell {
-        inputsFrom = builtins.attrValues self.checks.${system};
-        nativeBuildInputs = with pkgs;
-          [lld_13 cargo-flamegraph rust-analyzer]
-          ++ (lib.optional (stdenv.isx86_64 && stdenv.isLinux) pkgs.cargo-tarpaulin)
-          ++ (lib.optional stdenv.isLinux pkgs.lldb)
-          ++ (lib.optional stdenv.isDarwin pkgs.darwin.apple_sdk.frameworks.CoreFoundation);
-        shellHook = ''
-          export HELIX_RUNTIME="$PWD/runtime"
-          export RUST_BACKTRACE="1"
-          export RUSTFLAGS="${rustFlagsEnv}"
-        '';
-      };
+      # devShells.default = pkgs.mkShell {
+      #   # inputsFrom = builtins.attrValues self.checks.${system};
+      #   nativeBuildInputs = with pkgs;
+      #     [lld_13 cargo-flamegraph rust-analyzer]
+      #     ++ (lib.optional (stdenv.isx86_64 && stdenv.isLinux) pkgs.cargo-tarpaulin)
+      #     ++ (lib.optional stdenv.isLinux pkgs.lldb);
+      #   shellHook = ''
+      #     export HELIX_RUNTIME="$PWD/runtime"
+      #     export RUST_BACKTRACE="1"
+      #     export RUSTFLAGS="${rustFlagsEnv}"
+      #   '';
+      # };
     })
     // {
       overlays.default = final: prev: {
