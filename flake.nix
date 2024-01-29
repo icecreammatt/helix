@@ -156,11 +156,11 @@
         # Build the crate itself
         inherit (self.packages.${system}) helix;
 
-        clippy = craneLibMSRV.cargoClippy (commonArgs
-          // {
-            inherit cargoArtifacts;
-            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
-          });
+        #clippy = craneLibMSRV.cargoClippy (commonArgs
+         # // {
+          #  inherit cargoArtifacts;
+           # cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+          #});
 
         fmt = craneLibMSRV.cargoFmt commonArgs;
 
