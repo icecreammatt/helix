@@ -41,8 +41,8 @@ impl Decoration for EolBlame<'_> {
         let style = self.style;
         let width = renderer.viewport.width;
         let start_col = col - renderer.offset.col as u16;
-        // start drawing the git blame 1 space after the end of the line
-        let draw_col = col + 1;
+        // start drawing the git blame 6 spaces after the end of the line
+        let draw_col = col + 6;
 
         let end_col = renderer
             .column_in_bounds(draw_col as usize, 1)

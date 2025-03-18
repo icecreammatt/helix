@@ -1,4 +1,3 @@
-use helix_core::text_annotations::InlineAnnotation;
 use helix_event::{register_hook, send_blocking};
 use helix_view::{
     handlers::{BlameEvent, Handlers},
@@ -57,18 +56,10 @@ fn request_git_blame(editor: &mut Editor) {
         return;
     };
 
-    // gix-blame expects a 1-based line
+    // 0-based into 1-based line number
     let Ok(output) = editor.diff_providers.blame_line(file, cursor_line + 1) else {
         return;
     };
 
     doc.blame = Some(output.to_string());
-    // doc.blame = Some(vec![InlineAnnotation::new(
-    //     text.try_line_to_char(cursor_lin + 1)
-    //         .unwrap_or(text.len_chars())
-    //     // to get the last position in the current line
-    //     - 1,
-    //     output.to_string(),
-    // )]);
-    // log::error!("{:?}", doc.blame);
 }

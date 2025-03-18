@@ -49,11 +49,8 @@ impl DiffProviderRegistry {
             })
     }
 
-    pub fn blame_line(
-        &self,
-        file: &Path,
-        line: u32,
-    ) -> anyhow::Result<BlameInformation> {
+    /// Blame line in a file. Lines are 1-indexed
+    pub fn blame_line(&self, file: &Path, line: u32) -> anyhow::Result<BlameInformation> {
         self.providers
             .iter()
             .map(|provider| provider.blame_line(file, line))

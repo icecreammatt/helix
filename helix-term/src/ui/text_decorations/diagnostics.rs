@@ -271,41 +271,14 @@ impl Decoration for InlineDiagnostics<'_> {
             DiagnosticFilter::Disable => None,
         };
         if let Some((eol_diagnostic, _)) = eol_diagnostic {
-            let renderer = Renderer {
+            let mut renderer = Renderer {
                 renderer,
                 first_row: pos.visual_line,
                 row: pos.visual_line,
                 config: &self.state.config,
                 styles: &self.styles,
             };
-            // let ref mut this = renderer;
-            let row = pos.visual_line;
-            let col = virt_off.col;
-            let style = renderer.styles.severity_style(eol_diagnostic.severity());
-            let width = renderer.renderer.viewport.width;
-            let start_col = (col - renderer.renderer.offset.col) as u16;
-            let mut end_col = start_col;
-            let mut draw_col = (col + 1) as u16;
-
-            for line in eol_diagnostic.message.lines() {
-                if !renderer.renderer.column_in_bounds(draw_col as usize, 1) {
-                    break;
-                }
-
-                (end_col, _) = renderer.renderer.set_string_truncated(
-                    renderer.renderer.viewport.x + draw_col,
-                    row,
-                    line,
-                    width.saturating_sub(draw_col) as usize,
-                    |_| style,
-                    true,
-                    false,
-                );
-
-                draw_col = end_col - renderer.renderer.viewport.x + 2; // double space between lines
-            }
-
-            col_off = end_col - start_col;
+            col_off = renderer.draw_eol_diagnostic(eol_diagnostic, pos.visual_line, virt_off.col);
         }
 
         self.state.compute_line_diagnostics();

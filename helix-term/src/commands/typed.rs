@@ -70,29 +70,6 @@ impl CommandCompleter {
     }
 }
 
-fn blame(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow::Result<()> {
-    if event != PromptEvent::Validate {
-        return Ok(());
-    }
-
-    let (view, doc) = current_ref!(cx.editor);
-    let text = doc.text();
-    let selection = doc.selection(view.id);
-    let cursor_line = text.char_to_line(selection.primary().cursor(doc.text().slice(..)));
-    let result = cx
-        .editor
-        .diff_providers
-        .blame_line(doc.path().context("Not in a file")?, cursor_line.try_into()?)
-        .inspect_err(|err| {
-            log::error!("Could not get blame: {err}");
-        })
-        .context("No blame information")?;
-
-    cx.editor.set_status(result.to_string());
-
-    Ok(())
-}
-
 fn quit(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow::Result<()> {
     log::debug!("quitting...");
 
@@ -3572,17 +3549,6 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
         completer: CommandCompleter::none(),
         signature: Signature {
             positionals: (0, None),
-            ..Signature::DEFAULT
-        },
-    },
-    TypableCommand {
-        name: "blame-line-range",
-        aliases: &["blame"],
-        doc: "Blames a range of lines. No args: Blame selection. 1 arg: Blame line. 2 args: Represents (from, to) line range to git blame.",
-        fun: blame,
-        completer: CommandCompleter::none(),
-        signature: Signature {
-            positionals: (0, Some(2)),
             ..Signature::DEFAULT
         },
     },
