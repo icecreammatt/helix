@@ -201,15 +201,14 @@ impl EditorView {
             inline_diagnostic_config,
             config.end_of_line_diagnostics,
         ));
-        log::error!("{}", primary_cursor);
-        // if config.vcs.blame {
-        //     decorations.add_decoration(text_decorations::blame::EolBlame::new(
-        //         doc,
-        //         theme,
-        //         primary_cursor,
-        //         "hello world".to_string(),
-        //     ));
-        // }
+        if config.vcs.blame {
+            decorations.add_decoration(text_decorations::blame::EolBlame::new(
+                doc,
+                theme,
+                doc.text().char_to_line(primary_cursor),
+                "hello world".to_string(),
+            ));
+        }
         render_document(
             surface,
             inner,

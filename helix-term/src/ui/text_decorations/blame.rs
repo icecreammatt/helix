@@ -40,6 +40,9 @@ impl Decoration for EolBlame<'_> {
         pos: LinePos,
         virt_off: Position,
     ) -> Position {
+        if self.cursor != pos.doc_line {
+            return Position::new(0, 0);
+        }
         let row = pos.visual_line;
         let col = virt_off.col as u16;
         // if col != self.cursor as u16 {
@@ -67,7 +70,6 @@ impl Decoration for EolBlame<'_> {
                     .0
             })
             .unwrap_or(start_col);
-        log::error!("cursor: {}, row: {row}, col: {col}, start_col: {start_col}, draw_col: {draw_col}, end_col: {end_col}", self.cursor);
 
         let col_off = end_col - start_col;
 
