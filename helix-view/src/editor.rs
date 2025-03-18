@@ -174,6 +174,19 @@ impl Default for GutterLineNumbersConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
+pub struct VersionControlConfig {
+    /// Whether to enable git blame
+    pub blame: bool,
+}
+
+impl Default for VersionControlConfig {
+    fn default() -> Self {
+        Self { blame: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct FilePickerConfig {
     /// IgnoreOptions
     /// Enables ignoring hidden files.
@@ -370,6 +383,8 @@ pub struct Config {
     /// Whether to read settings from [EditorConfig](https://editorconfig.org) files. Defaults to
     /// `true`.
     pub editor_config: bool,
+    /// Version control
+    pub vcs: VersionControlConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
@@ -1014,6 +1029,7 @@ impl Default for Config {
             end_of_line_diagnostics: DiagnosticFilter::Disable,
             clipboard_provider: ClipboardProvider::default(),
             editor_config: true,
+            vcs: VersionControlConfig::default(),
         }
     }
 }

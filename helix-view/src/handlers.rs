@@ -16,11 +16,17 @@ pub enum AutoSaveEvent {
     LeftInsertMode,
 }
 
+#[derive(Debug)]
+pub enum BlameEvent {
+    PostCommand,
+}
+
 pub struct Handlers {
     // only public because most of the actual implementation is in helix-term right now :/
     pub completions: CompletionHandler,
     pub signature_hints: Sender<lsp::SignatureHelpEvent>,
     pub auto_save: Sender<AutoSaveEvent>,
+    pub blame: Sender<BlameEvent>,
 }
 
 impl Handlers {

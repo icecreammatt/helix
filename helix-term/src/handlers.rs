@@ -11,6 +11,7 @@ use crate::handlers::signature_help::SignatureHelpHandler;
 pub use helix_view::handlers::Handlers;
 
 mod auto_save;
+mod blame;
 pub mod completion;
 mod diagnostics;
 mod signature_help;
@@ -22,11 +23,13 @@ pub fn setup(config: Arc<ArcSwap<Config>>) -> Handlers {
     let event_tx = completion::CompletionHandler::new(config).spawn();
     let signature_hints = SignatureHelpHandler::new().spawn();
     let auto_save = AutoSaveHandler::new().spawn();
+    let blame = blame::BlameHandler.spawn();
 
     let handlers = Handlers {
         completions: helix_view::handlers::completion::CompletionHandler::new(event_tx),
         signature_hints,
         auto_save,
+        blame,
     };
 
     helix_view::handlers::register_hooks(&handlers);
@@ -35,5 +38,6 @@ pub fn setup(config: Arc<ArcSwap<Config>>) -> Handlers {
     auto_save::register_hooks(&handlers);
     diagnostics::register_hooks(&handlers);
     snippet::register_hooks(&handlers);
+    blame::register_hooks(&handlers);
     handlers
 }
