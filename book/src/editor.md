@@ -4,6 +4,7 @@
 - [`[editor.clipboard-provider]` Section](#editorclipboard-provider-section)
 - [`[editor.statusline]` Section](#editorstatusline-section)
 - [`[editor.lsp]` Section](#editorlsp-section)
+- [`[editor.vcs]` Section](#editorvcs-section)
 - [`[editor.cursor-shape]` Section](#editorcursor-shape-section)
 - [`[editor.file-picker]` Section](#editorfile-picker-section)
 - [`[editor.auto-pairs]` Section](#editorauto-pairs-section)
@@ -159,6 +160,14 @@ The following statusline elements can be configured:
 [^1]: By default, a progress spinner is shown in the statusline beside the file path.
 
 [^2]: You may also have to activate them in the language server config for them to appear, not just in Helix. Inlay hints in Helix are still being improved on and may be a little bit laggy/janky under some circumstances. Please report any bugs you see so we can fix them!
+
+### `[editor.vcs]` Section
+
+Version control config.
+
+| Key     | Description                                | Default |
+| ------- | ------------------------------------------ | ------- |
+| `blame` | Show git blame output for the current line | `false` |
 
 ### `[editor.cursor-shape]` Section
 
