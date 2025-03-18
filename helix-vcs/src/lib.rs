@@ -49,14 +49,14 @@ impl DiffProviderRegistry {
             })
     }
 
-    pub fn blame(
+    pub fn blame_line(
         &self,
         file: &Path,
-        range: std::ops::Range<u32>,
+        line: u32,
     ) -> anyhow::Result<BlameInformation> {
         self.providers
             .iter()
-            .map(|provider| provider.blame(file, range.clone()))
+            .map(|provider| provider.blame_line(file, line))
             .next()
             .context("No provider found")?
     }
@@ -121,10 +121,10 @@ impl DiffProvider {
         }
     }
 
-    fn blame(&self, file: &Path, range: std::ops::Range<u32>) -> Result<BlameInformation> {
+    fn blame_line(&self, file: &Path, line: u32) -> Result<BlameInformation> {
         match self {
             #[cfg(feature = "git")]
-            Self::Git => git::blame(file, range),
+            Self::Git => git::blame_line(file, line),
             Self::None => bail!("No blame support compiled in"),
         }
     }

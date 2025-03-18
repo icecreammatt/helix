@@ -144,7 +144,7 @@ impl fmt::Display for BlameInformation {
 }
 
 /// Emulates the result of running `git blame` from the command line.
-pub fn blame(file: &Path, range: std::ops::Range<u32>) -> Result<BlameInformation> {
+pub fn blame_line(file: &Path, line: u32) -> Result<BlameInformation> {
     let repo_dir = get_repo_dir(file)?;
     let repo = open_repo(repo_dir)
         .context("failed to open git repo")?
@@ -175,7 +175,7 @@ pub fn blame(file: &Path, range: std::ops::Range<u32>) -> Result<BlameInformatio
         traverse_all_commits,
         &mut resource_cache,
         BStr::new(relative_path),
-        Some(range),
+        Some(line..line.saturating_add(0)),
     )?
     .entries
     .first()

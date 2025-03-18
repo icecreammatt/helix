@@ -77,15 +77,11 @@ fn blame(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyho
 
     let (view, doc) = current_ref!(cx.editor);
     let selection = doc.selection(view.id);
-    let (from, to) = selection
-        .line_ranges(doc.text().slice(..))
-        .next()
-        .map(|(from, to)| (from as u32, to as u32))
-        .context("No selections")?;
+    let cursor_line = selection.primary().cursor(doc.text().slice(..));
     let result = cx
         .editor
         .diff_providers
-        .blame(doc.path().context("Not in a file")?, from..to)
+        .blame_line(doc.path().context("Not in a file")?, cursor_line.try_into()?)
         .inspect_err(|err| {
             log::error!("Could not get blame: {err}");
         })
