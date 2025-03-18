@@ -76,8 +76,9 @@ fn blame(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyho
     }
 
     let (view, doc) = current_ref!(cx.editor);
+    let text = doc.text();
     let selection = doc.selection(view.id);
-    let cursor_line = selection.primary().cursor(doc.text().slice(..));
+    let cursor_line = text.char_to_line(selection.primary().cursor(doc.text().slice(..)));
     let result = cx
         .editor
         .diff_providers
