@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables)]
+use helix_core::text_annotations::InlineAnnotation;
 use helix_event::{register_hook, send_blocking};
 use helix_view::{
     handlers::{BlameEvent, Handlers},
@@ -14,14 +14,15 @@ impl helix_event::AsyncHook for BlameHandler {
 
     fn handle_event(
         &mut self,
-        event: Self::Event,
-        timeout: Option<tokio::time::Instant>,
+        _event: Self::Event,
+        _timeout: Option<tokio::time::Instant>,
     ) -> Option<tokio::time::Instant> {
         self.finish_debounce();
         None
     }
 
     fn finish_debounce(&mut self) {
+        // TODO: this blocks on the main thread. Figure out how not to do that
         job::dispatch_blocking(move |editor, _| {
             request_git_blame(editor);
         })
@@ -40,22 +41,33 @@ pub(super) fn register_hooks(handlers: &Handlers) {
 }
 
 fn request_git_blame(editor: &mut Editor) {
-    let (view, doc) = current_ref!(editor);
+    let blame_enabled = editor.config().vcs.blame;
+    let (view, doc) = current!(editor);
     let text = doc.text();
     let selection = doc.selection(view.id);
     let Some(file) = doc.path() else {
         return;
     };
-    let Ok(cursor_line) = TryInto::<u32>::try_into(
-        text.char_to_line(selection.primary().cursor(doc.text().slice(..))),
-    ) else {
+    if !blame_enabled {
+        return;
+    }
+
+    let cursor_lin = text.char_to_line(selection.primary().cursor(doc.text().slice(..)));
+    let Ok(cursor_line) = TryInto::<u32>::try_into(cursor_lin) else {
         return;
     };
 
-    let output = editor.diff_providers.blame_line(file, cursor_line);
+    // gix-blame expects a 1-based line
+    let Ok(output) = editor.diff_providers.blame_line(file, cursor_line + 1) else {
+        return;
+    };
 
-    match output {
-        Ok(blame) => editor.set_status(blame.to_string()),
-        Err(err) => editor.set_error(err.to_string()),
-    }
+    doc.blame = Some(vec![InlineAnnotation::new(
+        text.try_line_to_char(cursor_lin + 1)
+            .unwrap_or(text.len_chars())
+        // to get the last position in the current line
+        - 1,
+        output.to_string(),
+    )]);
+    log::error!("{:?}", doc.blame);
 }
