@@ -58,7 +58,7 @@ impl DiffProviderRegistry {
             .iter()
             .map(|provider| provider.blame(file, range.clone()))
             .next()
-            .context("neno")?
+            .context("No provider found")?
     }
 
     /// Fire-and-forget changed file iteration. Runs everything in a background task. Keeps
