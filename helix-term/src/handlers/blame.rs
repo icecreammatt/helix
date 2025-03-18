@@ -22,6 +22,12 @@ impl helix_event::AsyncHook for BlameHandler {
 
     fn finish_debounce(&mut self) {
         // TODO: this blocks on the main thread. Figure out how not to do that
+        //
+        // Attempts so far:
+        // - tokio::spawn
+        // - std::thread::spawn
+        //
+        // For some reason none of the above fix the issue of blocking the UI.
         job::dispatch_blocking(move |editor, _| {
             request_git_blame(editor);
         })
