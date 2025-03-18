@@ -38,6 +38,6 @@ pub fn setup(config: Arc<ArcSwap<Config>>) -> Handlers {
     auto_save::register_hooks(&handlers);
     diagnostics::register_hooks(&handlers);
     snippet::register_hooks(&handlers);
-    blame::register_hooks(&handlers);
+    // blame::register_hooks(&handlers);
     handlers
 }
