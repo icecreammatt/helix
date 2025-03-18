@@ -1,5 +1,8 @@
+use std::path::PathBuf;
+
 use completion::{CompletionEvent, CompletionHandler};
 use helix_event::send_blocking;
+use helix_vcs::DiffProviderRegistry;
 use tokio::sync::mpsc::Sender;
 
 use crate::handlers::lsp::SignatureHelpInvoked;
@@ -18,7 +21,11 @@ pub enum AutoSaveEvent {
 
 #[derive(Debug)]
 pub enum BlameEvent {
-    PostCommand,
+    PostCommand {
+        file: PathBuf,
+        cursor_line: u32,
+        diff_providers: DiffProviderRegistry,
+    },
 }
 
 pub struct Handlers {

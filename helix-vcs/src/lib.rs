@@ -17,7 +17,7 @@ mod status;
 
 pub use status::FileChange;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DiffProviderRegistry {
     providers: Vec<DiffProvider>,
 }
@@ -94,7 +94,7 @@ impl Default for DiffProviderRegistry {
 /// cloning [DiffProviderRegistry] as `Clone` cannot be used in trait objects.
 ///
 /// `Copy` is simply to ensure the `clone()` call is the simplest it can be.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum DiffProvider {
     #[cfg(feature = "git")]
     Git,
