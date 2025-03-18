@@ -2,10 +2,11 @@ use anyhow::{bail, Context, Result};
 use arc_swap::ArcSwap;
 use gix::filter::plumbing::driver::apply::Delay;
 use std::io::Read;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::Arc;
 
-use gix::bstr::ByteSlice;
+use gix::bstr::{BStr, ByteSlice};
 use gix::diff::Rewrites;
 use gix::dir::entry::Status;
 use gix::objs::tree::EntryKind;
@@ -123,6 +124,57 @@ fn open_repo(path: &Path) -> Result<ThreadSafeRepository> {
     )?;
 
     Ok(res)
+}
+
+pub struct BlameInformation {
+    pub commit_hash: String,
+    pub author_name: String,
+    pub commit_date: String,
+    pub commit_message: String,
+}
+
+/// Emulates the result of running `git blame` from the command line.
+pub fn blame(file: &Path, range: std::ops::Range<u32>) -> Result<BlameInformation> {
+    let repo_dir = get_repo_dir(file)?;
+    let repo = open_repo(repo_dir)
+        .context("failed to open git repo")?
+        .to_thread_local();
+
+    let suspect = repo.head()?.peel_to_commit_in_place()?;
+    let traverse = gix::traverse::commit::topo::Builder::from_iters(
+        &repo.objects,
+        [suspect.id],
+        None::<Vec<gix::ObjectId>>,
+    )
+    .build()?;
+    let mut resource_cache = repo.diff_resource_cache_for_tree_diff()?;
+    let latest_commit_id = gix::blame::file(
+        &repo.objects,
+        traverse,
+        &mut resource_cache,
+        BStr::new(file.as_os_str().as_bytes()),
+        Some(range),
+    )?
+    .entries
+    .first()
+    .context("No commits found")?
+    .commit_id;
+
+    let commit = repo.find_commit(latest_commit_id)?;
+
+    let author = commit.author()?;
+
+    let commit_date = author.time.format(gix::date::time::format::SHORT);
+    let author_name = author.name.to_string();
+    let commit_hash = commit.short_id()?.to_string();
+    let commit_message = commit.message()?.title.to_string();
+
+    Ok(BlameInformation {
+        commit_hash,
+        author_name,
+        commit_date,
+        commit_message,
+    })
 }
 
 /// Emulates the result of running `git status` from the command line.

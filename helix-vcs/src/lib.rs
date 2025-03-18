@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use arc_swap::ArcSwap;
+use git::BlameInformation;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -46,6 +47,12 @@ impl DiffProviderRegistry {
                     None
                 }
             })
+    }
+
+    pub fn blame(&self, file: &Path, range: std::ops::Range<u32>) -> Option<BlameInformation> {
+        self.providers
+            .iter()
+            .find_map(|provider| provider.blame(file, range.clone()).ok())
     }
 
     /// Fire-and-forget changed file iteration. Runs everything in a background task. Keeps
@@ -105,6 +112,14 @@ impl DiffProvider {
             #[cfg(feature = "git")]
             Self::Git => git::get_current_head_name(file),
             Self::None => bail!("No diff support compiled in"),
+        }
+    }
+
+    fn blame(&self, file: &Path, range: std::ops::Range<u32>) -> Result<BlameInformation> {
+        match self {
+            #[cfg(feature = "git")]
+            Self::Git => git::blame(file, range),
+            Self::None => bail!("No blame support compiled in"),
         }
     }
 
