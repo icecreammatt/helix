@@ -452,14 +452,6 @@ impl View {
             text_annotations.add_overlay(labels, style);
         }
 
-        if let Some(blame_annotation) = &doc.blame {
-            let annotation_style = theme
-                .and_then(|t| t.find_scope_index("ui.virtual.inlay-hint.type"))
-                .map(Highlight);
-
-            text_annotations.add_inline_annotations(blame_annotation, annotation_style);
-        }
-
         if let Some(DocumentInlayHints {
             id: _,
             type_inlay_hints,

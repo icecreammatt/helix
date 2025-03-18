@@ -62,12 +62,13 @@ fn request_git_blame(editor: &mut Editor) {
         return;
     };
 
-    doc.blame = Some(vec![InlineAnnotation::new(
-        text.try_line_to_char(cursor_lin + 1)
-            .unwrap_or(text.len_chars())
-        // to get the last position in the current line
-        - 1,
-        output.to_string(),
-    )]);
-    log::error!("{:?}", doc.blame);
+    doc.blame = Some(output.to_string());
+    // doc.blame = Some(vec![InlineAnnotation::new(
+    //     text.try_line_to_char(cursor_lin + 1)
+    //         .unwrap_or(text.len_chars())
+    //     // to get the last position in the current line
+    //     - 1,
+    //     output.to_string(),
+    // )]);
+    // log::error!("{:?}", doc.blame);
 }

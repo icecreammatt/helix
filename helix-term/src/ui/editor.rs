@@ -202,12 +202,14 @@ impl EditorView {
             config.end_of_line_diagnostics,
         ));
         if config.vcs.blame {
-            decorations.add_decoration(text_decorations::blame::EolBlame::new(
-                doc,
-                theme,
-                doc.text().char_to_line(primary_cursor),
-                "hello world".to_string(),
-            ));
+            if let Some(blame) = &doc.blame {
+                decorations.add_decoration(text_decorations::blame::EolBlame::new(
+                    doc,
+                    theme,
+                    doc.text().char_to_line(primary_cursor),
+                    blame,
+                ));
+            }
         }
         render_document(
             surface,

@@ -137,7 +137,7 @@ impl fmt::Display for BlameInformation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "    {} - {} - {} - {}",
+            "{} • {} • {} • {}",
             self.author_name, self.commit_date, self.commit_message, self.commit_hash
         )
     }

@@ -1,6 +1,5 @@
 #![allow(dead_code, unused_variables, unused_mut)]
 
-use helix_core::doc_formatter::FormattedGrapheme;
 use helix_core::Position;
 
 use helix_view::theme::Style;
@@ -10,14 +9,14 @@ use crate::ui::document::{LinePos, TextRenderer};
 use crate::ui::text_decorations::Decoration;
 
 pub struct EolBlame<'a> {
-    message: String,
+    message: &'a str,
     doc: &'a Document,
     cursor: usize,
     style: Style,
 }
 
 impl<'a> EolBlame<'a> {
-    pub fn new(doc: &'a Document, theme: &Theme, cursor: usize, message: String) -> Self {
+    pub fn new(doc: &'a Document, theme: &Theme, cursor: usize, message: &'a str) -> Self {
         EolBlame {
             style: theme.get("ui.virtual.blame"),
             message,
@@ -28,12 +27,6 @@ impl<'a> EolBlame<'a> {
 }
 
 impl Decoration for EolBlame<'_> {
-    // fn decorate_line(&mut self, renderer: &mut TextRenderer, pos: LinePos) {
-    //     // renderer.draw_dec
-    //     //     ration_grapheme(grapheme, style, row, col)
-    //     let col_off = 50;
-    // }
-
     fn render_virt_lines(
         &mut self,
         renderer: &mut TextRenderer,
@@ -45,9 +38,6 @@ impl Decoration for EolBlame<'_> {
         }
         let row = pos.visual_line;
         let col = virt_off.col as u16;
-        // if col != self.cursor as u16 {
-        //     return Position::new(0, 0);
-        // }
         let style = self.style;
         let width = renderer.viewport.width;
         let start_col = col - renderer.offset.col as u16;
@@ -61,7 +51,7 @@ impl Decoration for EolBlame<'_> {
                     .set_string_truncated(
                         renderer.viewport.x + draw_col,
                         row,
-                        &self.message,
+                        self.message,
                         width.saturating_sub(draw_col) as usize,
                         |_| self.style,
                         true,
@@ -75,20 +65,4 @@ impl Decoration for EolBlame<'_> {
 
         Position::new(0, col_off as usize)
     }
-
-    // fn reset_pos(&mut self, _pos: usize) -> usize {
-    //     usize::MAX
-    // }
-
-    // fn skip_concealed_anchor(&mut self, conceal_end_char_idx: usize) -> usize {
-    //     self.reset_pos(conceal_end_char_idx)
-    // }
-
-    // fn decorate_grapheme(
-    //     &mut self,
-    //     _renderer: &mut TextRenderer,
-    //     _grapheme: &FormattedGrapheme,
-    // ) -> usize {
-    //     usize::MAX
-    // }
 }
