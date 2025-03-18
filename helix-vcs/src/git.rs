@@ -1,8 +1,8 @@
 use anyhow::{bail, Context, Result};
 use arc_swap::ArcSwap;
+use core::fmt;
 use gix::filter::plumbing::driver::apply::Delay;
 use std::io::Read;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -133,6 +133,16 @@ pub struct BlameInformation {
     pub commit_message: String,
 }
 
+impl fmt::Display for BlameInformation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} - {} - {} - {}",
+            self.author_name, self.commit_date, self.commit_message, self.commit_hash
+        )
+    }
+}
+
 /// Emulates the result of running `git blame` from the command line.
 pub fn blame(file: &Path, range: std::ops::Range<u32>) -> Result<BlameInformation> {
     let repo_dir = get_repo_dir(file)?;
@@ -141,18 +151,30 @@ pub fn blame(file: &Path, range: std::ops::Range<u32>) -> Result<BlameInformatio
         .to_thread_local();
 
     let suspect = repo.head()?.peel_to_commit_in_place()?;
-    let traverse = gix::traverse::commit::topo::Builder::from_iters(
+
+    let relative_path = file
+        .strip_prefix(
+            repo.path()
+                .parent()
+                .context("Could not get parent path of repository")?,
+        )
+        .unwrap_or(file)
+        .to_str()
+        .context("Could not convert path to string")?;
+
+    let traverse_all_commits = gix::traverse::commit::topo::Builder::from_iters(
         &repo.objects,
         [suspect.id],
         None::<Vec<gix::ObjectId>>,
     )
     .build()?;
+
     let mut resource_cache = repo.diff_resource_cache_for_tree_diff()?;
     let latest_commit_id = gix::blame::file(
         &repo.objects,
-        traverse,
+        traverse_all_commits,
         &mut resource_cache,
-        BStr::new(file.as_os_str().as_bytes()),
+        BStr::new(relative_path),
         Some(range),
     )?
     .entries
@@ -161,19 +183,13 @@ pub fn blame(file: &Path, range: std::ops::Range<u32>) -> Result<BlameInformatio
     .commit_id;
 
     let commit = repo.find_commit(latest_commit_id)?;
-
     let author = commit.author()?;
 
-    let commit_date = author.time.format(gix::date::time::format::SHORT);
-    let author_name = author.name.to_string();
-    let commit_hash = commit.short_id()?.to_string();
-    let commit_message = commit.message()?.title.to_string();
-
     Ok(BlameInformation {
-        commit_hash,
-        author_name,
-        commit_date,
-        commit_message,
+        commit_hash: commit.short_id()?.to_string(),
+        author_name: author.name.to_string(),
+        commit_date: author.time.format(gix::date::time::format::SHORT),
+        commit_message: commit.message()?.title.to_string(),
     })
 }
 

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use arc_swap::ArcSwap;
 use git::BlameInformation;
 use std::{
@@ -49,10 +49,16 @@ impl DiffProviderRegistry {
             })
     }
 
-    pub fn blame(&self, file: &Path, range: std::ops::Range<u32>) -> Option<BlameInformation> {
+    pub fn blame(
+        &self,
+        file: &Path,
+        range: std::ops::Range<u32>,
+    ) -> anyhow::Result<BlameInformation> {
         self.providers
             .iter()
-            .find_map(|provider| provider.blame(file, range.clone()).ok())
+            .map(|provider| provider.blame(file, range.clone()))
+            .next()
+            .context("neno")?
     }
 
     /// Fire-and-forget changed file iteration. Runs everything in a background task. Keeps
