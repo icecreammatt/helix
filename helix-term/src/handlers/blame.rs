@@ -64,7 +64,7 @@ impl helix_event::AsyncHook for BlameHandler {
 pub(super) fn register_hooks(handlers: &Handlers) {
     let tx = handlers.blame.clone();
     register_hook!(move |event: &mut PostCommand<'_, '_>| {
-        if !event.cx.editor.config().vcs.blame {
+        if !event.cx.editor.config().version_control.blame {
             return Ok(());
         }
 

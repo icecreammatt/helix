@@ -378,7 +378,7 @@ pub struct Config {
     /// `true`.
     pub editor_config: bool,
     /// Version control
-    pub vcs: VersionControlConfig,
+    pub version_control: VersionControlConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
@@ -1023,7 +1023,7 @@ impl Default for Config {
             end_of_line_diagnostics: DiagnosticFilter::Disable,
             clipboard_provider: ClipboardProvider::default(),
             editor_config: true,
-            vcs: VersionControlConfig::default(),
+            version_control: VersionControlConfig::default(),
         }
     }
 }
