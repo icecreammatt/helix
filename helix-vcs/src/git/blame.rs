@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::Path};
 
 use super::{get_repo_dir, open_repo};
 
-#[derive(Clone, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Clone, PartialEq, PartialOrd, Ord, Eq, Debug)]
 pub struct BlameInformation {
     pub commit_hash: Option<String>,
     pub author_name: Option<String>,
@@ -133,7 +133,7 @@ pub fn blame_line(
     //
     // So when our cursor is on the 10th added line or earlier, blame_line will be 0. This means
     // the blame will be incorrect. But that's fine, because when the cursor_line is on some hunk,
-    // we can show to the user nothing at all
+    // we can show to the user nothing at all. This is detected in the editor
     let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count;
 
     let repo_dir = get_repo_dir(file)?;
@@ -193,29 +193,93 @@ pub fn blame_line(
 
 #[cfg(test)]
 mod test {
+    use std::fs::File;
+
+    use crate::git::test::{create_commit_with_message, empty_git_repo};
+
     use super::*;
 
-    #[test]
-    pub fn inline_blame_parser() {
-        let bob = BlameInformation {
+    macro_rules! assert_blamed_lines {
+        ($repo:ident, $file:ident @ $($commit_msg:literal => $($line:literal $expected:literal),+);+ $(;)?) => {{
+            use std::fs::OpenOptions;
+            use std::io::Write;
+
+            let write_file = |content: &str| {
+                let mut f = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(&$file)
+                    .unwrap();
+                f.write_all(content.as_bytes()).unwrap();
+            };
+
+            let commit = |msg| create_commit_with_message($repo.path(), true, msg);
+
+            $(
+                let file_content = concat!($($line, "\n"),*);
+                write_file(file_content);
+                commit(stringify!($commit_msg));
+
+                let mut line_number = 0;
+
+                $(
+                    line_number += 1;
+                    let blame_result = blame_line(&$file, line_number, 0, 0).unwrap().commit_message;
+                    assert_eq!(
+                        blame_result,
+                        Some(concat!(stringify!($expected), "\n").to_owned()),
+                        "Blame mismatch at line {}: expected '{}', got {:?}",
+                        line_number,
+                        stringify!($expected),
+                        blame_result
+                    );
+                )*
+            )*
+        }};
+    }
+
+    fn bob() -> BlameInformation {
+        BlameInformation {
             commit_hash: Some("f14ab1cf".to_owned()),
             author_name: Some("Bob TheBuilder".to_owned()),
             author_email: Some("bob@bob.com".to_owned()),
             commit_date: Some("2028-01-10".to_owned()),
             commit_message: Some("feat!: extend house".to_owned()),
             commit_body: Some("BREAKING CHANGE: Removed door".to_owned()),
-        };
+        }
+    }
 
+    #[test]
+    pub fn blame_lin() {
+        let repo = empty_git_repo();
+        let file = repo.path().join("file.txt");
+        File::create(&file).unwrap();
+
+        assert_blamed_lines! {
+            repo, file @
+            1 =>
+                "fn main() {" 1,
+                "" 1,
+                "}" 1;
+            2 =>
+                "fn main() {" 1,
+                "  lol" 2,
+                "}" 1;
+        };
+    }
+
+    #[test]
+    pub fn inline_blame_format_parser() {
         let default_values = "{author}, {date} • {message} • {commit}";
 
         assert_eq!(
-            bob.parse_format(default_values),
+            bob().parse_format(default_values),
             "Bob TheBuilder, 2028-01-10 • feat!: extend house • f14ab1cf".to_owned()
         );
         assert_eq!(
             BlameInformation {
                 author_name: None,
-                ..bob.clone()
+                ..bob()
             }
             .parse_format(default_values),
             "2028-01-10 • feat!: extend house • f14ab1cf".to_owned()
@@ -223,7 +287,7 @@ mod test {
         assert_eq!(
             BlameInformation {
                 commit_date: None,
-                ..bob.clone()
+                ..bob()
             }
             .parse_format(default_values),
             "Bob TheBuilder • feat!: extend house • f14ab1cf".to_owned()
@@ -232,7 +296,7 @@ mod test {
             BlameInformation {
                 commit_message: None,
                 author_email: None,
-                ..bob.clone()
+                ..bob()
             }
             .parse_format(default_values),
             "Bob TheBuilder, 2028-01-10 • f14ab1cf".to_owned()
@@ -240,7 +304,7 @@ mod test {
         assert_eq!(
             BlameInformation {
                 commit_hash: None,
-                ..bob.clone()
+                ..bob()
             }
             .parse_format(default_values),
             "Bob TheBuilder, 2028-01-10 • feat!: extend house".to_owned()
@@ -249,7 +313,7 @@ mod test {
             BlameInformation {
                 commit_date: None,
                 author_name: None,
-                ..bob.clone()
+                ..bob()
             }
             .parse_format(default_values),
             "feat!: extend house • f14ab1cf".to_owned()
@@ -258,7 +322,7 @@ mod test {
             BlameInformation {
                 author_name: None,
                 commit_message: None,
-                ..bob.clone()
+                ..bob()
             }
             .parse_format(default_values),
             "2028-01-10 • f14ab1cf".to_owned()
