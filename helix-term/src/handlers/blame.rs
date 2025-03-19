@@ -64,30 +64,33 @@ impl helix_event::AsyncHook for BlameHandler {
 pub(super) fn register_hooks(handlers: &Handlers) {
     let tx = handlers.blame.clone();
     register_hook!(move |event: &mut PostCommand<'_, '_>| {
-        if event.cx.editor.config().vcs.blame {
-            let (view, doc) = current!(event.cx.editor);
-            let text = doc.text();
-            let selection = doc.selection(view.id);
-            let Some(file) = doc.path() else {
-                return Ok(());
-            };
-            let file = file.to_path_buf();
-
-            let Ok(cursor_line) = TryInto::<u32>::try_into(
-                text.char_to_line(selection.primary().cursor(doc.text().slice(..))),
-            ) else {
-                return Ok(());
-            };
-
-            send_blocking(
-                &tx,
-                BlameEvent::PostCommand {
-                    file,
-                    cursor_line,
-                    diff_providers: event.cx.editor.diff_providers.clone(),
-                },
-            );
+        if !event.cx.editor.config().vcs.blame {
+            return Ok(());
         }
+
+        let (view, doc) = current!(event.cx.editor);
+        let text = doc.text();
+        let selection = doc.selection(view.id);
+        let Some(file) = doc.path() else {
+            return Ok(());
+        };
+        let file = file.to_path_buf();
+
+        let Ok(cursor_line) =
+            u32::try_from(text.char_to_line(selection.primary().cursor(doc.text().slice(..))))
+        else {
+            return Ok(());
+        };
+
+        send_blocking(
+            &tx,
+            BlameEvent::PostCommand {
+                file,
+                cursor_line,
+                // ok to clone because diff_providers is very small
+                diff_providers: event.cx.editor.diff_providers.clone(),
+            },
+        );
 
         Ok(())
     });
