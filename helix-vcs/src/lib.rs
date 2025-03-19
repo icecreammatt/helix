@@ -2,7 +2,6 @@ use anyhow::Context as _;
 use anyhow::{anyhow, bail, Result};
 use arc_swap::ArcSwap;
 use git::BlameInformation;
-use std::ops::Range;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -55,20 +54,13 @@ impl DiffProviderRegistry {
     pub fn blame(
         &self,
         file: &Path,
-        range: Range<u32>,
+        line: u32,
         added_lines_count: u32,
         removed_lines_count: u32,
     ) -> anyhow::Result<BlameInformation> {
         self.providers
             .iter()
-            .map(|provider| {
-                provider.blame(
-                    file,
-                    range.start..range.end,
-                    added_lines_count,
-                    removed_lines_count,
-                )
-            })
+            .map(|provider| provider.blame(file, line, added_lines_count, removed_lines_count))
             .next()
             .context("No provider found")?
     }
@@ -136,13 +128,13 @@ impl DiffProvider {
     fn blame(
         &self,
         file: &Path,
-        range: Range<u32>,
+        line: u32,
         added_lines_count: u32,
         removed_lines_count: u32,
     ) -> Result<BlameInformation> {
         match self {
             #[cfg(feature = "git")]
-            Self::Git => git::blame(file, range, added_lines_count, removed_lines_count),
+            Self::Git => git::blame_line(file, line, added_lines_count, removed_lines_count),
             Self::None => bail!("No blame support compiled in"),
         }
     }

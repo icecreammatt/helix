@@ -44,12 +44,7 @@ impl helix_event::AsyncHook for BlameHandler {
 
         let worker = tokio::spawn(async move {
             diff_providers
-                .blame(
-                    &file,
-                    cursor_line..cursor_line,
-                    added_lines_count,
-                    removed_lines_count,
-                )
+                .blame(&file, cursor_line, added_lines_count, removed_lines_count)
                 .map(|s| s.parse_format(&blame_format))
         });
         self.worker = Some(worker);

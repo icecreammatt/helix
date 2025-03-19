@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use gix::bstr::BStr;
-use std::{collections::HashMap, ops::Range, path::Path};
+use std::{collections::HashMap, path::Path};
 
 use super::{get_repo_dir, open_repo};
 
@@ -116,10 +116,10 @@ impl BlameInformation {
     }
 }
 
-/// `git blame` a range in a file
-pub fn blame(
+/// `git blame` a single line in a file
+pub fn blame_line(
     file: &Path,
-    range: Range<u32>,
+    line: u32,
     added_lines_count: u32,
     removed_lines_count: u32,
 ) -> anyhow::Result<BlameInformation> {
@@ -134,9 +134,7 @@ pub fn blame(
     // So when our cursor is on the 10th added line or earlier, blame_line will be 0. This means
     // the blame will be incorrect. But that's fine, because when the cursor_line is on some hunk,
     // we can show to the user nothing at all
-    let normalize = |line: u32| line.saturating_sub(added_lines_count) + removed_lines_count;
-
-    let blame_range = normalize(range.start)..normalize(range.end);
+    let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count;
 
     let repo_dir = get_repo_dir(file)?;
     let repo = open_repo(repo_dir)
@@ -168,7 +166,7 @@ pub fn blame(
         traverse_all_commits,
         &mut resource_cache,
         BStr::new(relative_path),
-        Some(blame_range),
+        Some(blame_line..blame_line),
     )?
     .entries
     .first()
