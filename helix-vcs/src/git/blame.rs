@@ -214,14 +214,14 @@ mod test {
         };
         ($any:tt, $commit_msg:literal) => {
             compile_error!(concat!(
-                "expected no_commit or nothing for commit ",
+                "expected `no_commit` or nothing for commit ",
                 $commit_msg
             ))
         };
     }
 
-    macro_rules! add_flag {
-        (add, $commit_msg:literal, $line:expr) => {
+    macro_rules! insert_flag {
+        (insert, $commit_msg:literal, $line:expr) => {
             true
         };
         (, $commit_msg:literal, $line:expr) => {
@@ -229,7 +229,7 @@ mod test {
         };
         ($any:tt, $commit_msg:literal, $line:expr) => {
             compile_error!(concat!(
-                "expected no_commit or nothing for commit ",
+                "expected `insert` or nothing for commit ",
                 $commit_msg,
                 " line ",
                 $line
@@ -244,6 +244,8 @@ mod test {
     /// which then becomes the new contents of the $file
     ///
     /// Each $line gets blamed using blame_line. The $expected is the commit identifier that we are expecting for that line.
+    ///
+    /// $commit_msg can also have a `no_commit` ident next to it, in which case this block won't be committed
     macro_rules! assert_line_blame_progress {
         ($($commit_msg:literal $($no_commit:ident)? => $($line:literal $($expected:literal)? $($added:ident)? ),+);+ $(;)?) => {{
             use std::fs::OpenOptions;
@@ -279,7 +281,7 @@ mod test {
 
                 $(
                     line_number += 1;
-                    let has_add_flag = add_flag!($($added)?, $commit_msg, $line);
+                    let has_add_flag = insert_flag!($($added)?, $commit_msg, $line);
                     if has_add_flag {
                         added_lines += 1;
                     }
@@ -311,24 +313,42 @@ mod test {
                 "fn main() {" 1,
                 "" 1,
                 "}" 1;
+            // modifying a line works
             2 =>
                 "fn main() {" 1,
                 "  one" 2,
                 "}" 1;
+            // inserting a line works
             3 =>
                 "fn main() {" 1,
                 "  one" 2,
                 "  two" 3,
                 "}" 1;
+            // deleting a line works
             4 =>
                 "fn main() {" 1,
                 "  two" 3,
                 "}" 1;
+            // when a line is inserted in-between the blame order is preserved
             5 no_commit =>
                 "fn main() {" 1,
-                "  hello world" add,
+                "  hello world" insert,
                 "  two" 3,
                 "}" 1;
+            // Having a bunch of random lines interspersed should not change which lines
+            // have blame for which commits
+            6 no_commit =>
+                "  six" insert,
+                "  three" insert,
+                "fn main() {" 1,
+                "  five" insert,
+                "  four" insert,
+                "  two" 3,
+                "  five" insert,
+                "  four" insert,
+                "}" 1,
+                "  five" insert,
+                "  four" insert;
         };
     }
 
