@@ -4,6 +4,7 @@ use std::{collections::HashMap, ops::Range, path::Path};
 
 use super::{get_repo_dir, open_repo};
 
+#[derive(Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub struct BlameInformation {
     pub commit_hash: Option<String>,
     pub author_name: Option<String>,
@@ -190,4 +191,79 @@ pub fn blame(
             .as_ref()
             .and_then(|msg| msg.body.map(|body| body.to_string())),
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    pub fn inline_blame_parser() {
+        let bob = BlameInformation {
+            commit_hash: Some("f14ab1cf".to_owned()),
+            author_name: Some("Bob TheBuilder".to_owned()),
+            author_email: Some("bob@bob.com".to_owned()),
+            commit_date: Some("2028-01-10".to_owned()),
+            commit_message: Some("feat!: extend house".to_owned()),
+            commit_body: Some("BREAKING CHANGE: Removed door".to_owned()),
+        };
+
+        let default_values = "{author}, {date} • {message} • {commit}";
+
+        assert_eq!(
+            bob.parse_format(default_values),
+            "Bob TheBuilder, 2028-01-10 • feat!: extend house • f14ab1cf".to_owned()
+        );
+        assert_eq!(
+            BlameInformation {
+                author_name: None,
+                ..bob.clone()
+            }
+            .parse_format(default_values),
+            "2028-01-10 • feat!: extend house • f14ab1cf".to_owned()
+        );
+        assert_eq!(
+            BlameInformation {
+                commit_date: None,
+                ..bob.clone()
+            }
+            .parse_format(default_values),
+            "Bob TheBuilder • feat!: extend house • f14ab1cf".to_owned()
+        );
+        assert_eq!(
+            BlameInformation {
+                commit_message: None,
+                author_email: None,
+                ..bob.clone()
+            }
+            .parse_format(default_values),
+            "Bob TheBuilder, 2028-01-10 • f14ab1cf".to_owned()
+        );
+        assert_eq!(
+            BlameInformation {
+                commit_hash: None,
+                ..bob.clone()
+            }
+            .parse_format(default_values),
+            "Bob TheBuilder, 2028-01-10 • feat!: extend house".to_owned()
+        );
+        assert_eq!(
+            BlameInformation {
+                commit_date: None,
+                author_name: None,
+                ..bob.clone()
+            }
+            .parse_format(default_values),
+            "feat!: extend house • f14ab1cf".to_owned()
+        );
+        assert_eq!(
+            BlameInformation {
+                author_name: None,
+                commit_message: None,
+                ..bob.clone()
+            }
+            .parse_format(default_values),
+            "2028-01-10 • f14ab1cf".to_owned()
+        );
+    }
 }
