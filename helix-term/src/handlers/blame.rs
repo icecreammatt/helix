@@ -1,7 +1,6 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use helix_event::{register_hook, send_blocking};
-use helix_vcs::DiffProviderRegistry;
 use helix_view::handlers::{BlameEvent, Handlers};
 use tokio::{task::JoinHandle, time::Instant};
 
@@ -10,16 +9,6 @@ use crate::{events::PostCommand, job};
 #[derive(Default)]
 pub struct BlameHandler {
     worker: Option<JoinHandle<anyhow::Result<String>>>,
-}
-
-async fn compute_diff(
-    file: PathBuf,
-    line: u32,
-    diff_providers: DiffProviderRegistry,
-) -> anyhow::Result<String> {
-    diff_providers
-        .blame_line(&file, line)
-        .map(|s| s.to_string())
 }
 
 impl helix_event::AsyncHook for BlameHandler {
@@ -44,7 +33,11 @@ impl helix_event::AsyncHook for BlameHandler {
             diff_providers,
         } = event;
 
-        let worker = tokio::spawn(compute_diff(file, cursor_line, diff_providers));
+        let worker = tokio::spawn(async move {
+            diff_providers
+                .blame_line(&file, cursor_line)
+                .map(|s| s.to_string())
+        });
         self.worker = Some(worker);
         Some(Instant::now() + Duration::from_millis(50))
     }
@@ -53,21 +46,19 @@ impl helix_event::AsyncHook for BlameHandler {
         if let Some(worker) = &self.worker {
             if worker.is_finished() {
                 let worker = self.worker.take().unwrap();
-                tokio::spawn(handle_worker(worker));
+                tokio::spawn(async move {
+                    let Ok(Ok(outcome)) = worker.await else {
+                        return;
+                    };
+                    job::dispatch(move |editor, _| {
+                        let doc = doc_mut!(editor);
+                        doc.blame = Some(outcome);
+                    })
+                    .await;
+                });
             }
         }
     }
-}
-
-async fn handle_worker(worker: JoinHandle<anyhow::Result<String>>) {
-    let Ok(Ok(outcome)) = worker.await else {
-        return;
-    };
-    job::dispatch(move |editor, _| {
-        let doc = doc_mut!(editor);
-        doc.blame = Some(outcome);
-    })
-    .await;
 }
 
 pub(super) fn register_hooks(handlers: &Handlers) {
@@ -80,6 +71,7 @@ pub(super) fn register_hooks(handlers: &Handlers) {
             let Some(file) = doc.path() else {
                 return Ok(());
             };
+            let file = file.to_path_buf();
 
             let Ok(cursor_line) = TryInto::<u32>::try_into(
                 text.char_to_line(selection.primary().cursor(doc.text().slice(..))),
@@ -90,7 +82,7 @@ pub(super) fn register_hooks(handlers: &Handlers) {
             send_blocking(
                 &tx,
                 BlameEvent::PostCommand {
-                    file: file.to_path_buf(),
+                    file,
                     cursor_line,
                     diff_providers: event.cx.editor.diff_providers.clone(),
                 },
