@@ -191,6 +191,12 @@ pub fn blame_line(
     })
 }
 
+// attributes on expressions are not allowed
+// however, in our macro its possible that sometimes the
+// assignment to the mutable variable will not be read.
+//
+// when the last line has no expected blame commit
+#[allow(unused_assignments)]
 #[cfg(test)]
 mod test {
     use std::fs::File;
@@ -199,43 +205,131 @@ mod test {
 
     use super::*;
 
-    macro_rules! assert_blamed_lines {
-        ($repo:ident, $file:ident @ $($commit_msg:literal => $($line:literal $expected:literal),+);+ $(;)?) => {{
+    macro_rules! no_commit_flag {
+        (no_commit, $commit_msg:literal) => {
+            false
+        };
+        (, $commit_msg:literal) => {
+            true
+        };
+        ($any:tt, $commit_msg:literal) => {
+            compile_error!(concat!(
+                "expected no_commit or nothing for commit ",
+                $commit_msg
+            ))
+        };
+    }
+
+    macro_rules! add_flag {
+        (add, $commit_msg:literal, $line:expr) => {
+            true
+        };
+        (, $commit_msg:literal, $line:expr) => {
+            false
+        };
+        ($any:tt, $commit_msg:literal, $line:expr) => {
+            compile_error!(concat!(
+                "expected no_commit or nothing for commit ",
+                $commit_msg,
+                " line ",
+                $line
+            ))
+        };
+    }
+
+    /// Helper macro to create a history of the same file being modified.
+    ///
+    /// Each $commit_msg is a unique identifier for a commit message.
+    /// Each $line is a string line of the file. These $lines are collected into a single String
+    /// which then becomes the new contents of the $file
+    ///
+    /// Each $line gets blamed using blame_line. The $expected is the commit identifier that we are expecting for that line.
+    macro_rules! assert_line_blame_progress {
+        ($($commit_msg:literal $($no_commit:ident)? => $($line:literal $($expected:literal)? $($added:ident)? ),+);+ $(;)?) => {{
             use std::fs::OpenOptions;
             use std::io::Write;
+
+            let repo = empty_git_repo();
+            let file = repo.path().join("file.txt");
+            File::create(&file).expect("could not create file");
 
             let write_file = |content: &str| {
                 let mut f = OpenOptions::new()
                     .write(true)
                     .truncate(true)
-                    .open(&$file)
+                    .open(&file)
                     .unwrap();
                 f.write_all(content.as_bytes()).unwrap();
             };
 
-            let commit = |msg| create_commit_with_message($repo.path(), true, msg);
+            let commit = |msg| create_commit_with_message(repo.path(), true, msg);
 
             $(
                 let file_content = concat!($($line, "\n"),*);
+                eprintln!("at commit {}:\n\n{file_content}", stringify!($commit_msg));
                 write_file(file_content);
-                commit(stringify!($commit_msg));
+
+                let should_commit = no_commit_flag!($($no_commit)?, $commit_msg);
+                if should_commit {
+                    commit(stringify!($commit_msg));
+                }
 
                 let mut line_number = 0;
+                let mut added_lines = 0;
 
                 $(
                     line_number += 1;
-                    let blame_result = blame_line(&$file, line_number, 0, 0).unwrap().commit_message;
-                    assert_eq!(
-                        blame_result,
-                        Some(concat!(stringify!($expected), "\n").to_owned()),
-                        "Blame mismatch at line {}: expected '{}', got {:?}",
-                        line_number,
-                        stringify!($expected),
-                        blame_result
-                    );
+                    let has_add_flag = add_flag!($($added)?, $commit_msg, $line);
+                    if has_add_flag {
+                        added_lines += 1;
+                    }
+                    // if there is no $expected, then we don't care what blame_line returns
+                    // because we won't show it to the user.
+                    $(
+
+                        let blame_result = blame_line(&file, line_number, added_lines, 0).unwrap().commit_message;
+                        assert_eq!(
+                            blame_result,
+                            Some(concat!(stringify!($expected), "\n").to_owned()),
+                            "Blame mismatch\nat commit: {}\nat line: {}\nline contents: {}\nexpected commit: {}\nbut got commit: {}",
+                            $commit_msg,
+                            line_number,
+                            file_content.lines().nth(line_number.try_into().unwrap()).unwrap(),
+                            stringify!($expected),
+                            blame_result.as_ref().map(|blame| blame.trim_end()).unwrap_or("<no commit>")
+                        );
+                    )?
                 )*
             )*
         }};
+    }
+
+    #[test]
+    pub fn blamed_lines() {
+        assert_line_blame_progress! {
+            1 =>
+                "fn main() {" 1,
+                "" 1,
+                "}" 1;
+            2 =>
+                "fn main() {" 1,
+                "  one" 2,
+                "}" 1;
+            3 =>
+                "fn main() {" 1,
+                "  one" 2,
+                "  two" 3,
+                "}" 1;
+            4 =>
+                "fn main() {" 1,
+                "  two" 3,
+                "}" 1;
+            5 no_commit =>
+                "fn main() {" 1,
+                "  hello world" add,
+                "  two" 3,
+                "}" 1;
+        };
     }
 
     fn bob() -> BlameInformation {
@@ -247,25 +341,6 @@ mod test {
             commit_message: Some("feat!: extend house".to_owned()),
             commit_body: Some("BREAKING CHANGE: Removed door".to_owned()),
         }
-    }
-
-    #[test]
-    pub fn blame_lin() {
-        let repo = empty_git_repo();
-        let file = repo.path().join("file.txt");
-        File::create(&file).unwrap();
-
-        assert_blamed_lines! {
-            repo, file @
-            1 =>
-                "fn main() {" 1,
-                "" 1,
-                "}" 1;
-            2 =>
-                "fn main() {" 1,
-                "  lol" 2,
-                "}" 1;
-        };
     }
 
     #[test]
