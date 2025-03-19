@@ -134,7 +134,9 @@ pub fn blame_line(
     // So when our cursor is on the 10th added line or earlier, blame_line will be 0. This means
     // the blame will be incorrect. But that's fine, because when the cursor_line is on some hunk,
     // we can show to the user nothing at all. This is detected in the editor
-    let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count;
+    //
+    // Add 1 to convert 0-based line numbers into 1-based
+    let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count + 1;
 
     let repo_dir = get_repo_dir(file)?;
     let repo = open_repo(repo_dir)

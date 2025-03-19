@@ -32,19 +32,16 @@ impl helix_event::AsyncHook for BlameHandler {
             file,
             cursor_line,
             diff_providers,
-            removed_lines_count,
-            added_lines_count,
+            deleted_lines_count: removed_lines_count,
+            inserted_lines_count: added_lines_count,
             blame_format,
         } = event;
 
         self.cursor_line = cursor_line;
 
-        // convert 0-based line numbers into 1-based line numbers
-        let cursor_line = cursor_line + 1;
-
         let worker = tokio::spawn(async move {
             diff_providers
-                .blame(&file, cursor_line, added_lines_count, removed_lines_count)
+                .blame_line(&file, cursor_line, added_lines_count, removed_lines_count)
                 .map(|s| s.parse_format(&blame_format))
         });
         self.worker = Some(worker);
@@ -87,38 +84,27 @@ pub(super) fn register_hooks(handlers: &Handlers) {
         }
 
         let (view, doc) = current!(event.cx.editor);
-        let text = doc.text();
-        let selection = doc.selection(view.id);
         let Some(file) = doc.path() else {
             return Ok(());
         };
         let file = file.to_path_buf();
 
-        let Ok(cursor_line) =
-            u32::try_from(text.char_to_line(selection.primary().cursor(doc.text().slice(..))))
-        else {
+        let Ok(cursor_line) = u32::try_from(doc.cursor_line(view.id)) else {
             return Ok(());
         };
 
         let hunks = doc.diff_handle().unwrap().load();
 
-        let mut removed_lines_count: u32 = 0;
-        let mut added_lines_count: u32 = 0;
-        for hunk in hunks.hunks_intersecting_line_ranges(std::iter::once((0, cursor_line as usize)))
-        {
-            let lines_inserted = hunk.after.end - hunk.after.start;
-            let lines_removed = hunk.before.end - hunk.before.start;
-            added_lines_count += lines_inserted;
-            removed_lines_count += lines_removed;
-        }
+        let (inserted_lines_count, deleted_lines_count) =
+            hunks.inserted_and_deleted_before_line(cursor_line as usize);
 
         send_blocking(
             &tx,
             BlameEvent::PostCommand {
                 file,
                 cursor_line,
-                removed_lines_count,
-                added_lines_count,
+                deleted_lines_count,
+                inserted_lines_count,
                 // ok to clone because diff_providers is very small
                 diff_providers: event.cx.editor.diff_providers.clone(),
                 // ok to clone because blame_format is likely to be about 30 characters or less

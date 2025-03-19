@@ -50,8 +50,8 @@ impl DiffProviderRegistry {
             })
     }
 
-    /// Blame range of lines in a file. Lines are 1-indexed
-    pub fn blame(
+    /// Blame a line in a file
+    pub fn blame_line(
         &self,
         file: &Path,
         line: u32,
@@ -60,7 +60,7 @@ impl DiffProviderRegistry {
     ) -> anyhow::Result<BlameInformation> {
         self.providers
             .iter()
-            .map(|provider| provider.blame(file, line, added_lines_count, removed_lines_count))
+            .map(|provider| provider.blame_line(file, line, added_lines_count, removed_lines_count))
             .next()
             .context("No provider found")?
     }
@@ -125,7 +125,7 @@ impl DiffProvider {
         }
     }
 
-    fn blame(
+    fn blame_line(
         &self,
         file: &Path,
         line: u32,

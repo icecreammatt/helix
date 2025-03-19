@@ -1293,6 +1293,13 @@ impl Document {
         Range::new(0, 1).grapheme_aligned(self.text().slice(..))
     }
 
+    /// Get the line of cursor for the primary selection
+    pub fn cursor_line(&self, view_id: ViewId) -> usize {
+        let text = self.text();
+        let selection = self.selection(view_id);
+        text.char_to_line(selection.primary().cursor(text.slice(..)))
+    }
+
     /// Reset the view's selection on this document to the
     /// [origin](Document::origin) cursor.
     pub fn reset_selection(&mut self, view_id: ViewId) {
