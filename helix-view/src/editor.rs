@@ -172,11 +172,21 @@ impl Default for GutterLineNumbersConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct VersionControlConfig {
     /// Whether to enable git blame
-    pub blame: bool,
+    pub inline_blame: bool,
+    pub inline_blame_format: String,
+}
+
+impl Default for VersionControlConfig {
+    fn default() -> Self {
+        Self {
+            inline_blame: false,
+            inline_blame_format: "{author}, {date} • {message} • {commit}".to_owned(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

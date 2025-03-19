@@ -1,24 +1,68 @@
 use anyhow::Context as _;
-use core::fmt;
 use gix::bstr::BStr;
-use std::{ops::Range, path::Path};
+use std::{collections::HashMap, ops::Range, path::Path};
 
 use super::{get_repo_dir, open_repo};
 
 pub struct BlameInformation {
     pub commit_hash: String,
     pub author_name: String,
+    pub author_email: String,
     pub commit_date: String,
     pub commit_message: String,
 }
 
-impl fmt::Display for BlameInformation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}, {} • {} • {}",
-            self.author_name, self.commit_date, self.commit_message, self.commit_hash
-        )
+impl BlameInformation {
+    /// Parse the user's blame format
+    pub fn parse_format(&self, format: &str) -> String {
+        let mut formatted = String::with_capacity(format.len() * 2);
+
+        let variables = HashMap::from([
+            ("commit", &self.commit_hash),
+            ("author", &self.author_name),
+            ("date", &self.commit_date),
+            ("message", &self.commit_message),
+            ("email", &self.author_email),
+        ]);
+
+        let mut chars = format.chars().peekable();
+        while let Some(ch) = chars.next() {
+            // "{{" => '{'
+            if ch == '{' && chars.next_if_eq(&'{').is_some() {
+                formatted.push('{');
+            }
+            // "}}" => '}'
+            else if ch == '}' && chars.next_if_eq(&'}').is_some() {
+                formatted.push('}');
+            } else if ch == '{' {
+                let mut variable = String::new();
+                // eat all characters until the end
+                while let Some(ch) = chars.next_if(|ch| *ch != '}') {
+                    variable.push(ch);
+                }
+                // eat the '}' if it was found
+                let has_closing = chars.next().is_some();
+                let res = variables
+                    .get(variable.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        // Invalid variable. So just add whatever we parsed before
+                        let mut result = String::with_capacity(variable.len() + 2);
+                        result.push('{');
+                        result.push_str(variable.as_str());
+                        if has_closing {
+                            result.push('}');
+                        }
+                        result
+                    });
+
+                formatted.push_str(&res);
+            } else {
+                formatted.push(ch);
+            }
+        }
+
+        formatted
     }
 }
 
@@ -87,6 +131,7 @@ pub fn blame(
     Ok(BlameInformation {
         commit_hash: commit.short_id()?.to_string(),
         author_name: author.name.to_string(),
+        author_email: author.email.to_string(),
         commit_date: author.time.format(gix::date::time::format::SHORT),
         commit_message: commit.message()?.title.to_string(),
     })

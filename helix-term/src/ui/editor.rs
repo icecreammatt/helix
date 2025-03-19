@@ -201,7 +201,7 @@ impl EditorView {
             inline_diagnostic_config,
             config.end_of_line_diagnostics,
         ));
-        if config.version_control.blame {
+        if config.version_control.inline_blame {
             if let Some(blame) = &doc.blame {
                 decorations.add_decoration(text_decorations::blame::EolBlame::new(
                     doc,

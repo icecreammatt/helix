@@ -34,6 +34,7 @@ impl helix_event::AsyncHook for BlameHandler {
             diff_providers,
             removed_lines_count,
             added_lines_count,
+            blame_format,
         } = event;
 
         self.cursor_line = cursor_line;
@@ -49,7 +50,7 @@ impl helix_event::AsyncHook for BlameHandler {
                     added_lines_count,
                     removed_lines_count,
                 )
-                .map(|s| s.to_string())
+                .map(|s| s.parse_format(&blame_format))
         });
         self.worker = Some(worker);
         Some(Instant::now() + Duration::from_millis(50))
@@ -85,7 +86,8 @@ impl helix_event::AsyncHook for BlameHandler {
 pub(super) fn register_hooks(handlers: &Handlers) {
     let tx = handlers.blame.clone();
     register_hook!(move |event: &mut PostCommand<'_, '_>| {
-        if !event.cx.editor.config().version_control.blame {
+        let version_control_config = &event.cx.editor.config().version_control;
+        if !version_control_config.inline_blame {
             return Ok(());
         }
 
@@ -124,6 +126,8 @@ pub(super) fn register_hooks(handlers: &Handlers) {
                 added_lines_count,
                 // ok to clone because diff_providers is very small
                 diff_providers: event.cx.editor.diff_providers.clone(),
+                // ok to clone because blame_format is likely to be about 30 characters or less
+                blame_format: version_control_config.inline_blame_format.clone(),
             },
         );
 

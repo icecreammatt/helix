@@ -29,6 +29,8 @@ pub enum BlameEvent {
         /// How many lines were added before cursor_line
         added_lines_count: u32,
         diff_providers: DiffProviderRegistry,
+        /// Format of the blame
+        blame_format: String,
     },
 }
 
