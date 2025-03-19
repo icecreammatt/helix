@@ -24,6 +24,10 @@ pub enum BlameEvent {
     PostCommand {
         file: PathBuf,
         cursor_line: u32,
+        /// How many lines were removed before cursor_line
+        removed_lines_count: u32,
+        /// How many lines were added before cursor_line
+        added_lines_count: u32,
         diff_providers: DiffProviderRegistry,
     },
 }
