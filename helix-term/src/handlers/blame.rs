@@ -17,8 +17,6 @@ async fn compute_diff(
     line: u32,
     diff_providers: DiffProviderRegistry,
 ) -> anyhow::Result<String> {
-    // std::thread::sleep(Duration::from_secs(5));
-    // Ok("hhe".to_string())
     diff_providers
         .blame_line(&file, line)
         .map(|s| s.to_string())
