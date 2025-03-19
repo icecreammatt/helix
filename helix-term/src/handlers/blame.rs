@@ -41,23 +41,14 @@ impl helix_event::AsyncHook for BlameHandler {
         // convert 0-based line numbers into 1-based line numbers
         let cursor_line = cursor_line + 1;
 
-        // the line for which we compute the blame
-        // Because gix_blame doesn't care about stuff that is not commited, we have to "normalize" the
-        // line number to account for uncommited code.
-        //
-        // You'll notice that blame_line can be 0 when, for instance we have:
-        // - removed 0 lines
-        // - added 10 lines
-        // - cursor_line is 8
-        //
-        // So when our cursor is on the 10th added line or earlier, blame_line will be 0. This means
-        // the blame will be incorrect. But that's fine, because when the cursor_line is on some hunk,
-        // we can show to the user nothing at all
-        let blame_line = cursor_line.saturating_sub(added_lines_count) + removed_lines_count;
-
         let worker = tokio::spawn(async move {
             diff_providers
-                .blame_line(&file, blame_line)
+                .blame(
+                    &file,
+                    cursor_line..cursor_line,
+                    added_lines_count,
+                    removed_lines_count,
+                )
                 .map(|s| s.to_string())
         });
         self.worker = Some(worker);

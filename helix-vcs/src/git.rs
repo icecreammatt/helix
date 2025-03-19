@@ -1,12 +1,11 @@
 use anyhow::{bail, Context, Result};
 use arc_swap::ArcSwap;
-use core::fmt;
+use gix::bstr::ByteSlice as _;
 use gix::filter::plumbing::driver::apply::Delay;
 use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 
-use gix::bstr::{BStr, ByteSlice};
 use gix::diff::Rewrites;
 use gix::dir::entry::Status;
 use gix::objs::tree::EntryKind;
@@ -22,6 +21,9 @@ use crate::FileChange;
 
 #[cfg(test)]
 mod test;
+
+mod blame;
+pub use blame::*;
 
 #[inline]
 fn get_repo_dir(file: &Path) -> Result<&Path> {
@@ -124,73 +126,6 @@ fn open_repo(path: &Path) -> Result<ThreadSafeRepository> {
     )?;
 
     Ok(res)
-}
-
-pub struct BlameInformation {
-    pub commit_hash: String,
-    pub author_name: String,
-    pub commit_date: String,
-    pub commit_message: String,
-}
-
-impl fmt::Display for BlameInformation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}, {} • {} • {}",
-            self.author_name, self.commit_date, self.commit_message, self.commit_hash
-        )
-    }
-}
-
-/// Emulates the result of running `git blame` from the command line.
-pub fn blame_line(file: &Path, line: u32) -> Result<BlameInformation> {
-    let repo_dir = get_repo_dir(file)?;
-    let repo = open_repo(repo_dir)
-        .context("failed to open git repo")?
-        .to_thread_local();
-
-    let suspect = repo.head()?.peel_to_commit_in_place()?;
-
-    let relative_path = file
-        .strip_prefix(
-            repo.path()
-                .parent()
-                .context("Could not get parent path of repository")?,
-        )
-        .unwrap_or(file)
-        .to_str()
-        .context("Could not convert path to string")?;
-
-    let traverse_all_commits = gix::traverse::commit::topo::Builder::from_iters(
-        &repo.objects,
-        [suspect.id],
-        None::<Vec<gix::ObjectId>>,
-    )
-    .build()?;
-
-    let mut resource_cache = repo.diff_resource_cache_for_tree_diff()?;
-    let latest_commit_id = gix::blame::file(
-        &repo.objects,
-        traverse_all_commits,
-        &mut resource_cache,
-        BStr::new(relative_path),
-        Some(line..line.saturating_add(0)),
-    )?
-    .entries
-    .first()
-    .context("No commits found")?
-    .commit_id;
-
-    let commit = repo.find_commit(latest_commit_id)?;
-    let author = commit.author()?;
-
-    Ok(BlameInformation {
-        commit_hash: commit.short_id()?.to_string(),
-        author_name: author.name.to_string(),
-        commit_date: author.time.format(gix::date::time::format::SHORT),
-        commit_message: commit.message()?.title.to_string(),
-    })
 }
 
 /// Emulates the result of running `git status` from the command line.
