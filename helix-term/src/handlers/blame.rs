@@ -76,20 +76,17 @@ pub(super) fn register_hooks(handlers: &Handlers) {
     let tx = handlers.blame.clone();
     register_hook!(move |event: &mut PostCommand<'_, '_>| {
         if event.cx.editor.config().vcs.blame {
-            let blame_enabled = event.cx.editor.config().vcs.blame;
             let (view, doc) = current!(event.cx.editor);
             let text = doc.text();
             let selection = doc.selection(view.id);
             let Some(file) = doc.path() else {
-                panic!();
+                return Ok(());
             };
-            if !blame_enabled {
-                panic!();
-            }
 
-            let cursor_lin = text.char_to_line(selection.primary().cursor(doc.text().slice(..)));
-            let Ok(cursor_line) = TryInto::<u32>::try_into(cursor_lin) else {
-                panic!();
+            let Ok(cursor_line) = TryInto::<u32>::try_into(
+                text.char_to_line(selection.primary().cursor(doc.text().slice(..))),
+            ) else {
+                return Ok(());
             };
 
             send_blocking(
