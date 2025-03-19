@@ -165,7 +165,32 @@ The following statusline elements can be configured:
 
 | Key     | Description                                | Default |
 | ------- | ------------------------------------------ | ------- |
-| `blame` | Show git blame output for the current line | `false` |
+| `inline-blame` | Show git blame output for the current line | `false` |
+| `inline-blame-format` | The format in which to show the inline blame | `"{author}, {date} • {message} • {commit}"` |
+
+For `inline-blame-format`, you can use specific variables like so: `{variable}`.
+
+These are the available variables:
+
+- `author`: The author of the commit
+- `date`: When the commit was made
+- `message`: The message of the commit, excluding the body
+- `body`: The body of the commit
+- `commit`: The short hex SHA1 hash of the commit
+- `email`: The email of the author of the commit
+
+Any of the variables can potentially be empty.
+In this case, the content before the variable will not be included in the string.
+If the variable is at the beginning of the string, the content after the variable will not be included.
+
+Some examples, using the default value `inline-blame-format` value:
+
+- If `author` is empty: `"{date} • {message} • {commit}"`
+- If `date` is empty: `"{author} • {message} • {commit}"`
+- If `message` is empty: `"{author}, {date} • {commit}"`
+- If `commit` is empty: `"{author}, {date} • {message}"`
+- If `date` and `message` is empty: `"{author} • {commit}"`
+- If `author` and `message` is empty: `"{date} • {commit}"`
 
 ### `[editor.cursor-shape]` Section
 
