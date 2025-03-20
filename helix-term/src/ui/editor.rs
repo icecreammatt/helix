@@ -203,16 +203,24 @@ impl EditorView {
             inline_diagnostic_config,
             config.end_of_line_diagnostics,
         ));
+
         if config.version_control.inline_blame {
-            if let Some(blame) = &doc.blame {
-                decorations.add_decoration(InlineBlame::new(
-                    doc,
-                    theme,
-                    doc.cursor_line(view.id),
-                    blame,
-                ));
+            let cursor_line = doc.cursor_line(view.id);
+            log::error!("{:?}", doc.file_blame);
+            if let Some(blame) = doc
+                .diff_handle()
+                .map(|handle| handle.load().inserted_and_deleted_before_line(cursor_line))
+                .and_then(|(ins, del)| {
+                    doc.file_blame.as_ref().map(|fb| {
+                        fb.blame_for_line(cursor_line as u32, ins, del)
+                            .parse_format(&config.version_control.inline_blame_format)
+                    })
+                })
+            {
+                decorations.add_decoration(InlineBlame::new(doc, theme, cursor_line, blame));
             }
         }
+
         render_document(
             surface,
             inner,

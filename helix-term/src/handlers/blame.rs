@@ -7,14 +7,18 @@ use helix_view::{
     handlers::{BlameEvent, Handlers},
     DocumentId,
 };
-use tokio::{task::JoinHandle, time::Instant};
+use tokio::{sync::oneshot, time::Instant};
 
-use crate::{events::DidRequestInlineBlameUpdate, job};
+use crate::job;
 
 #[derive(Default)]
 pub struct BlameHandler {
-    worker: Option<JoinHandle<anyhow::Result<FileBlame>>>,
+    worker: Option<WorkerHandle>,
     doc_id: DocumentId,
+}
+
+struct WorkerHandle {
+    completion_rx: oneshot::Receiver<anyhow::Result<FileBlame>>,
 }
 
 impl helix_event::AsyncHook for BlameHandler {
@@ -25,43 +29,49 @@ impl helix_event::AsyncHook for BlameHandler {
         event: Self::Event,
         _timeout: Option<tokio::time::Instant>,
     ) -> Option<tokio::time::Instant> {
-        if let Some(worker) = &self.worker {
-            if worker.is_finished() {
+        if let Some(worker) = &mut self.worker {
+            if worker.completion_rx.try_recv().is_ok() {
                 self.finish_debounce();
                 return None;
             }
-            return Some(Instant::now() + Duration::from_millis(50));
         }
 
         self.doc_id = event.doc_id;
+        let (completion_tx, completion_rx) = oneshot::channel();
 
-        let worker = tokio::spawn(async move { FileBlame::try_new(event.path) });
-        self.worker = Some(worker);
+        tokio::spawn(async move {
+            let result = FileBlame::try_new(event.path);
+            let _ = completion_tx.send(result);
+        });
+
+        self.worker = Some(WorkerHandle { completion_rx });
+
         Some(Instant::now() + Duration::from_millis(50))
     }
 
     fn finish_debounce(&mut self) {
         let doc_id = self.doc_id;
-        if let Some(worker) = &self.worker {
-            if worker.is_finished() {
-                let worker = self.worker.take().expect("Inside of an if let Some(...)");
-                tokio::spawn(async move {
-                    let Ok(Ok(file_blame)) = worker.await else {
+        if let Some(worker) = self.worker.take() {
+            tokio::spawn(async move {
+                let Ok(result) = worker.completion_rx.await else {
+                    return;
+                };
+
+                let Ok(file_blame) = result else {
+                    return;
+                };
+
+                job::dispatch(move |editor, _| {
+                    let Some(doc) = editor.document_mut(doc_id) else {
                         return;
                     };
-                    job::dispatch(move |editor, _| {
-                        let Some(doc) = editor.document_mut(doc_id) else {
-                            return;
-                        };
-                        doc.file_blame = Some(file_blame);
-                    })
-                    .await;
-                });
-            }
+                    doc.file_blame = Some(file_blame);
+                })
+                .await;
+            });
         }
     }
 }
-
 pub(super) fn register_hooks(handlers: &Handlers) {
     let tx = handlers.blame.clone();
     register_hook!(move |event: &mut DidRequestFileBlameUpdate<'_>| {
@@ -85,34 +95,6 @@ pub(super) fn register_hooks(handlers: &Handlers) {
                 doc_id: event.doc,
             },
         );
-
-        Ok(())
-    });
-    register_hook!(move |event: &mut DidRequestInlineBlameUpdate<'_>| {
-        let version_control_config = &event.editor.config().version_control;
-        let (view, doc) = current!(event.editor);
-
-        if !version_control_config.inline_blame {
-            return Ok(());
-        }
-
-        let cursor_line = doc.cursor_line(view.id);
-        let Some(diff_handle) = doc.diff_handle() else {
-            return Ok(());
-        };
-        let (inserted_lines, deleted_lines) = diff_handle
-            .load()
-            .inserted_and_deleted_before_line(cursor_line);
-
-        let Some(blame) = &doc.file_blame else {
-            return Ok(());
-        };
-
-        let blame = blame
-            .blame_for_line(cursor_line as u32, inserted_lines, deleted_lines)
-            .parse_format(&version_control_config.inline_blame_format);
-
-        doc.blame = Some(blame);
 
         Ok(())
     });

@@ -197,8 +197,6 @@ pub struct Document {
     version_control_head: Option<Arc<ArcSwap<Box<str>>>>,
     /// Contains blame information for each line in the file
     pub file_blame: Option<helix_vcs::FileBlame>,
-    /// Contains the inline blame string
-    pub blame: Option<String>,
 
     // when document was used for most-recent-used buffer picker
     pub focused_at: std::time::Instant,
@@ -707,7 +705,6 @@ impl Document {
             focused_at: std::time::Instant::now(),
             readonly: false,
             jump_labels: HashMap::new(),
-            blame: None,
             file_blame: None,
         }
     }

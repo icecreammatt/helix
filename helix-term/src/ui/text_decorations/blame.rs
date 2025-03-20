@@ -9,14 +9,14 @@ use crate::ui::document::{LinePos, TextRenderer};
 use crate::ui::text_decorations::Decoration;
 
 pub struct InlineBlame<'a> {
-    message: &'a str,
+    message: String,
     doc: &'a Document,
     cursor: usize,
     style: Style,
 }
 
 impl<'a> InlineBlame<'a> {
-    pub fn new(doc: &'a Document, theme: &Theme, cursor: usize, message: &'a str) -> Self {
+    pub fn new(doc: &'a Document, theme: &Theme, cursor: usize, message: String) -> Self {
         InlineBlame {
             style: theme.get("ui.virtual.blame"),
             message,
@@ -51,7 +51,7 @@ impl Decoration for InlineBlame<'_> {
                     .set_string_truncated(
                         renderer.viewport.x + draw_col,
                         row,
-                        self.message,
+                        &self.message,
                         width.saturating_sub(draw_col) as usize,
                         |_| self.style,
                         true,

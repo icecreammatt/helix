@@ -4,7 +4,6 @@ use helix_view::events::{
     DiagnosticsDidChange, DocumentDidChange, DocumentDidClose, DocumentDidOpen, DocumentFocusLost,
     LanguageServerExited, LanguageServerInitialized, SelectionDidChange,
 };
-use helix_view::Editor;
 
 use crate::commands;
 use crate::keymap::MappableCommand;
@@ -13,7 +12,6 @@ events! {
     OnModeSwitch<'a, 'cx> { old_mode: Mode, new_mode: Mode, cx: &'a mut commands::Context<'cx> }
     PostInsertChar<'a, 'cx> { c: char, cx: &'a mut commands::Context<'cx> }
     PostCommand<'a, 'cx> { command: & 'a MappableCommand, cx: &'a mut commands::Context<'cx> }
-    DidRequestInlineBlameUpdate<'a> { editor: &'a mut Editor }
 }
 
 pub fn register() {
@@ -25,7 +23,6 @@ pub fn register() {
     register_event::<DocumentDidClose>();
     register_event::<DocumentFocusLost>();
     register_event::<DidRequestFileBlameUpdate>();
-    register_event::<DidRequestInlineBlameUpdate>();
     register_event::<SelectionDidChange>();
     register_event::<DiagnosticsDidChange>();
     register_event::<LanguageServerInitialized>();
