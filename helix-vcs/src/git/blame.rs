@@ -207,6 +207,18 @@ mod test {
 
     use super::*;
 
+    /// describes how a line was modified
+    #[derive(PartialEq, PartialOrd, Ord, Eq)]
+    enum LineDiff {
+        /// this line is added
+        Insert,
+        /// this line is deleted
+        Delete,
+        /// no changes for this line
+        None,
+    }
+
+    /// checks if the first argument is `no_commit` or not
     macro_rules! no_commit_flag {
         (no_commit, $commit_msg:literal) => {
             false
@@ -222,13 +234,7 @@ mod test {
         };
     }
 
-    #[derive(PartialEq, PartialOrd, Ord, Eq)]
-    enum LineDiff {
-        Insert,
-        Delete,
-        None,
-    }
-
+    /// checks if the first argument is `insert` or `delete`
     macro_rules! line_diff_flag {
         (insert, $commit_msg:literal, $line:expr) => {
             LineDiff::Insert
@@ -249,8 +255,8 @@ mod test {
         };
     }
 
-    /// this utility macro exists because we can't pass a `match` statement into `concat!`
-    /// we wouldl like to exclude any lines that are "delete"
+    /// This macro exists because we can't pass a `match` statement into `concat!`
+    /// we would like to exclude any lines that are `delete`
     macro_rules! line_diff_flag_str {
         (insert, $commit_msg:literal, $line:expr) => {
             concat!($line, path_separator_literal!())
@@ -271,8 +277,7 @@ mod test {
         };
     }
 
-    /// We need to use it in `concat!` so we can't use std::path::MAIN_SEPARATOR_STR
-    /// Also, attributes on expressions are experimental so we have to use a whole macro for this
+    /// Attributes on expressions are experimental so we have to use a whole macro for this
     #[cfg(windows)]
     macro_rules! path_separator_literal {
         () => {
@@ -287,16 +292,29 @@ mod test {
     }
 
     /// Helper macro to create a history of the same file being modified.
-    ///
-    /// Each $commit_msg is a unique identifier for a commit message.
-    /// Each $line is a string line of the file. These $lines are collected into a single String
-    /// which then becomes the new contents of the $file
-    ///
-    /// Each $line gets blamed using blame_line. The $expected is the commit identifier that we are expecting for that line.
-    ///
-    /// $commit_msg can also have a `no_commit` ident next to it, in which case this block won't be committed
     macro_rules! assert_line_blame_progress {
-        ($($commit_msg:literal $($no_commit:ident)? => $($line:literal $($expected:literal)? $($line_diff:ident)? ),+);+ $(;)?) => {{
+        (
+            $(
+                // a unique identifier for the commit, other commits must not use this
+                // If `no_commit` option is used, use the identifier of the previous commit
+                $commit_msg:literal
+                // must be `no_commit` if exists.
+                // If exists, this block won't be committed
+                $($no_commit:ident)? =>
+                $(
+                    // contents of a line in the file
+                    $line:literal
+                    // what commit identifier we are expecting for this line
+                    $($expected:literal)?
+                    // must be `insert` or `delete` if exists
+                    // if exists, must be used with `no_commit`
+                    // - `insert`: this line is added
+                    // - `delete`: this line is deleted
+                    $($line_diff:ident)?
+                ),+
+            );+
+            $(;)?
+        ) => {{
             use std::fs::OpenOptions;
             use std::io::Write;
 
@@ -317,6 +335,7 @@ mod test {
                     .truncate(true)
                     .open(&file)
                     .unwrap();
+
                 f.write_all(file_content.as_bytes()).unwrap();
 
                 let should_commit = no_commit_flag!($($no_commit)?, $commit_msg);
@@ -340,16 +359,25 @@ mod test {
                         // because we won't show it to the user.
                         $(
 
-                            let blame_result = blame_line(&file, line_number, added_lines, removed_lines).unwrap().commit_message;
+                            let blame_result =
+                                blame_line(&file, line_number, added_lines, removed_lines)
+                                    .unwrap()
+                                    .commit_message;
                             assert_eq!(
                                 blame_result,
                                 Some(concat!(stringify!($expected), path_separator_literal!()).to_owned()),
                                 "Blame mismatch\nat commit: {}\nat line: {}\nline contents: {}\nexpected commit: {}\nbut got commit: {}",
                                 $commit_msg,
                                 line_number,
-                                file_content.lines().nth(line_number.try_into().unwrap()).unwrap(),
+                                file_content
+                                    .lines()
+                                    .nth(line_number.try_into().unwrap())
+                                    .unwrap(),
                                 stringify!($expected),
-                                blame_result.as_ref().map(|blame| blame.trim_end()).unwrap_or("<no commit>")
+                                blame_result
+                                    .as_ref()
+                                    .map(|blame| blame.trim_end())
+                                    .unwrap_or("<no commit>")
                             );
                         )?
                         line_number += 1;
