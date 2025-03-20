@@ -93,10 +93,13 @@ pub(super) fn register_hooks(handlers: &Handlers) {
             return Ok(());
         };
 
-        let hunks = doc.diff_handle().unwrap().load();
+        let Some(hunks) = doc.diff_handle() else {
+            return Ok(());
+        };
 
-        let (inserted_lines_count, deleted_lines_count) =
-            hunks.inserted_and_deleted_before_line(cursor_line as usize);
+        let (inserted_lines_count, deleted_lines_count) = hunks
+            .load()
+            .inserted_and_deleted_before_line(cursor_line as usize);
 
         send_blocking(
             &tx,
