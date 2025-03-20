@@ -282,7 +282,6 @@ mod test {
                 let mut added_lines = 0;
 
                 $(
-                    line_number += 1;
                     let has_add_flag = insert_flag!($($added)?, $commit_msg, $line);
                     if has_add_flag {
                         added_lines += 1;
@@ -303,6 +302,7 @@ mod test {
                             blame_result.as_ref().map(|blame| blame.trim_end()).unwrap_or("<no commit>")
                         );
                     )?
+                    line_number += 1;
                 )*
             )*
         }};
@@ -332,14 +332,14 @@ mod test {
                 "  two" 3,
                 "}" 1;
             // when a line is inserted in-between the blame order is preserved
-            5 no_commit =>
+            0 no_commit =>
                 "fn main() {" 1,
                 "  hello world" insert,
                 "  two" 3,
                 "}" 1;
             // Having a bunch of random lines interspersed should not change which lines
             // have blame for which commits
-            6 no_commit =>
+            0 no_commit =>
                 "  six" insert,
                 "  three" insert,
                 "fn main() {" 1,
@@ -351,6 +351,21 @@ mod test {
                 "}" 1,
                 "  five" insert,
                 "  four" insert;
+            // committing all of those insertions should recognize that they are
+            // from the current commit, while still keeping the information about
+            // previous commits
+            5 =>
+                "  six" 5,
+                "  three" 5,
+                "fn main() {" 1,
+                "  five" 5,
+                "  four" 5,
+                "  two" 3,
+                "  five" 5,
+                "  four" 5,
+                "}" 1,
+                "  five" 5,
+                "  four" 5;
         };
     }
 
