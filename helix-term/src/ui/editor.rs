@@ -208,7 +208,7 @@ impl EditorView {
                 decorations.add_decoration(InlineBlame::new(
                     doc,
                     theme,
-                    doc.text().char_to_line(primary_cursor),
+                    doc.cursor_line(view.id),
                     blame,
                 ));
             }

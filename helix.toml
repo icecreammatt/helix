@@ -1,4 +1,0 @@
-theme = "catppuccin"
-
-[editor.version-control]
-inline-blame = true

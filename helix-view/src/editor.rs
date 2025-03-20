@@ -21,7 +21,7 @@ use helix_vcs::DiffProviderRegistry;
 use futures_util::stream::select_all::SelectAll;
 use futures_util::{future, StreamExt};
 use helix_lsp::{Call, LanguageServerId};
-use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use std::{
     borrow::Cow,
@@ -37,7 +37,7 @@ use std::{
 
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-    time::{interval, sleep, Duration, Instant, Sleep},
+    time::{sleep, Duration, Instant, Sleep},
 };
 
 use anyhow::{anyhow, bail, Error};
@@ -1111,8 +1111,6 @@ pub struct Editor {
     pub auto_pairs: Option<AutoPairs>,
 
     pub idle_timer: Pin<Box<Sleep>>,
-    pub tick: IntervalStream,
-    pub ticks_elapsed: u128,
     redraw_timer: Pin<Box<Sleep>>,
     last_motion: Option<Motion>,
     pub last_completion: Option<CompleteAction>,
@@ -1139,7 +1137,6 @@ pub struct Editor {
     pub mouse_down_range: Option<Range>,
     pub cursor_cache: CursorCache,
     pub blame_string: Option<String>,
-    pub blame_cache: Option<(ViewId, u32)>,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1151,7 +1148,6 @@ pub enum EditorEvent {
     LanguageServerMessage((LanguageServerId, Call)),
     DebuggerEvent(dap::Payload),
     IdleTimer,
-    Tick,
     Redraw,
 }
 
@@ -1206,9 +1202,6 @@ pub enum CloseError {
     SaveError(anyhow::Error),
 }
 
-/// A tick happens every this amount of milliseconds
-pub const TICK_DURATION: Duration = Duration::from_millis(1000 / 60);
-
 impl Editor {
     pub fn new(
         mut area: Rect,
@@ -1254,8 +1247,6 @@ impl Editor {
             status_msg: None,
             autoinfo: None,
             idle_timer: Box::pin(sleep(conf.idle_timeout)),
-            tick: IntervalStream::new(interval(TICK_DURATION)),
-            ticks_elapsed: 0,
             redraw_timer: Box::pin(sleep(Duration::MAX)),
             last_motion: None,
             last_completion: None,
@@ -1268,7 +1259,6 @@ impl Editor {
             handlers,
             mouse_down_range: None,
             cursor_cache: CursorCache::default(),
-            blame_cache: None,
             blame_string: None,
         }
     }
@@ -2178,9 +2168,6 @@ impl Editor {
                 }
                 _ = &mut self.idle_timer  => {
                     return EditorEvent::IdleTimer
-                }
-                _ = &mut self.tick.next() => {
-                    return EditorEvent::Tick
                 }
             }
         }

@@ -25,7 +25,6 @@ impl helix_event::AsyncHook for BlameHandler {
         event: Self::Event,
         _timeout: Option<tokio::time::Instant>,
     ) -> Option<tokio::time::Instant> {
-        log::error!("handle_event blame.rs");
         if let Some(worker) = &self.worker {
             if worker.is_finished() {
                 self.finish_debounce();
@@ -45,7 +44,7 @@ impl helix_event::AsyncHook for BlameHandler {
         let doc_id = self.doc_id;
         if let Some(worker) = &self.worker {
             if worker.is_finished() {
-                let worker = self.worker.take().unwrap();
+                let worker = self.worker.take().expect("Inside of an if let Some(...)");
                 tokio::spawn(async move {
                     let Ok(Ok(file_blame)) = worker.await else {
                         return;
@@ -54,8 +53,6 @@ impl helix_event::AsyncHook for BlameHandler {
                         let Some(doc) = editor.document_mut(doc_id) else {
                             return;
                         };
-                        // log::error!("Got file blame: {file_blame:?}");
-
                         doc.file_blame = Some(file_blame);
                     })
                     .await;
@@ -68,23 +65,18 @@ impl helix_event::AsyncHook for BlameHandler {
 pub(super) fn register_hooks(handlers: &Handlers) {
     let tx = handlers.blame.clone();
     register_hook!(move |event: &mut DidRequestFileBlameUpdate<'_>| {
-        log::error!("0");
         let version_control_config = &event.editor.config().version_control;
         if !version_control_config.inline_blame {
             return Ok(());
         }
-        log::error!("1");
 
         let Some(doc) = event.editor.document(event.doc) else {
             return Ok(());
         };
-        log::error!("2");
 
-        log::error!("{:?}", doc.path());
         let Some(path) = doc.path() else {
             return Ok(());
         };
-        log::error!("3");
 
         send_blocking(
             &tx,
@@ -115,13 +107,10 @@ pub(super) fn register_hooks(handlers: &Handlers) {
         let Some(blame) = &doc.file_blame else {
             return Ok(());
         };
-        log::error!("got blame: {blame:?}");
 
         let blame = blame
             .blame_for_line(cursor_line as u32, inserted_lines, deleted_lines)
             .parse_format(&version_control_config.inline_blame_format);
-
-        log::error!("got blame_string: {blame}");
 
         doc.blame = Some(blame);
 
