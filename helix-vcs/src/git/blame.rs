@@ -5,6 +5,83 @@ use std::path::Path;
 
 use super::{get_repo_dir, open_repo};
 
+/// `git blame` a single line in a file
+pub fn blame_line(
+    file: &Path,
+    line: u32,
+    added_lines_count: u32,
+    removed_lines_count: u32,
+) -> anyhow::Result<BlameInformation> {
+    // Because gix_blame doesn't care about stuff that is not commited, we have to "normalize" the
+    // line number to account for uncommited code.
+    //
+    // You'll notice that blame_line can be 0 when, for instance we have:
+    // - removed 0 lines
+    // - added 10 lines
+    // - cursor_line is 8
+    //
+    // So when our cursor is on the 10th added line or earlier, blame_line will be 0. This means
+    // the blame will be incorrect. But that's fine, because when the cursor_line is on some hunk,
+    // we can show to the user nothing at all. This is detected in the editor
+    //
+    // Add 1 to convert 0-based line numbers into 1-based
+    let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count + 1;
+
+    let repo_dir = get_repo_dir(file)?;
+    let repo = open_repo(repo_dir)
+        .context("failed to open git repo")?
+        .to_thread_local();
+
+    let suspect = repo.head()?.peel_to_commit_in_place()?;
+
+    let relative_path = file
+        .strip_prefix(
+            repo.path()
+                .parent()
+                .context("Could not get parent path of repository")?,
+        )
+        .unwrap_or(file)
+        .to_str()
+        .context("Could not convert path to string")?;
+
+    let traverse_all_commits = gix::traverse::commit::topo::Builder::from_iters(
+        &repo.objects,
+        [suspect.id],
+        None::<Vec<gix::ObjectId>>,
+    )
+    .build()?;
+
+    let mut resource_cache = repo.diff_resource_cache_for_tree_diff()?;
+    let latest_commit_id = gix::blame::file(
+        &repo.objects,
+        traverse_all_commits,
+        &mut resource_cache,
+        BStr::new(relative_path),
+        Some(blame_line..blame_line),
+    )?
+    .entries
+    .first()
+    .context("No commits found")?
+    .commit_id;
+
+    let commit = repo.find_commit(latest_commit_id).ok();
+    let message = commit.as_ref().and_then(|c| c.message().ok());
+    let author = commit.as_ref().and_then(|c| c.author().ok());
+
+    Ok(BlameInformation {
+        commit_hash: commit
+            .as_ref()
+            .and_then(|c| c.short_id().map(|id| id.to_string()).ok()),
+        author_name: author.map(|a| a.name.to_string()),
+        author_email: author.map(|a| a.email.to_string()),
+        commit_date: author.map(|a| a.time.format(gix::date::time::format::SHORT)),
+        commit_message: message.as_ref().map(|msg| msg.title.to_string()),
+        commit_body: message
+            .as_ref()
+            .and_then(|msg| msg.body.map(|body| body.to_string())),
+    })
+}
+
 #[derive(Clone, PartialEq, PartialOrd, Ord, Eq, Debug)]
 pub struct BlameInformation {
     pub commit_hash: Option<String>,
@@ -106,83 +183,6 @@ impl BlameInformation {
 
         formatted
     }
-}
-
-/// `git blame` a single line in a file
-pub fn blame_line(
-    file: &Path,
-    line: u32,
-    added_lines_count: u32,
-    removed_lines_count: u32,
-) -> anyhow::Result<BlameInformation> {
-    // Because gix_blame doesn't care about stuff that is not commited, we have to "normalize" the
-    // line number to account for uncommited code.
-    //
-    // You'll notice that blame_line can be 0 when, for instance we have:
-    // - removed 0 lines
-    // - added 10 lines
-    // - cursor_line is 8
-    //
-    // So when our cursor is on the 10th added line or earlier, blame_line will be 0. This means
-    // the blame will be incorrect. But that's fine, because when the cursor_line is on some hunk,
-    // we can show to the user nothing at all. This is detected in the editor
-    //
-    // Add 1 to convert 0-based line numbers into 1-based
-    let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count + 1;
-
-    let repo_dir = get_repo_dir(file)?;
-    let repo = open_repo(repo_dir)
-        .context("failed to open git repo")?
-        .to_thread_local();
-
-    let suspect = repo.head()?.peel_to_commit_in_place()?;
-
-    let relative_path = file
-        .strip_prefix(
-            repo.path()
-                .parent()
-                .context("Could not get parent path of repository")?,
-        )
-        .unwrap_or(file)
-        .to_str()
-        .context("Could not convert path to string")?;
-
-    let traverse_all_commits = gix::traverse::commit::topo::Builder::from_iters(
-        &repo.objects,
-        [suspect.id],
-        None::<Vec<gix::ObjectId>>,
-    )
-    .build()?;
-
-    let mut resource_cache = repo.diff_resource_cache_for_tree_diff()?;
-    let latest_commit_id = gix::blame::file(
-        &repo.objects,
-        traverse_all_commits,
-        &mut resource_cache,
-        BStr::new(relative_path),
-        Some(blame_line..blame_line),
-    )?
-    .entries
-    .first()
-    .context("No commits found")?
-    .commit_id;
-
-    let commit = repo.find_commit(latest_commit_id).ok();
-    let message = commit.as_ref().and_then(|c| c.message().ok());
-    let author = commit.as_ref().and_then(|c| c.author().ok());
-
-    Ok(BlameInformation {
-        commit_hash: commit
-            .as_ref()
-            .and_then(|c| c.short_id().map(|id| id.to_string()).ok()),
-        author_name: author.map(|a| a.name.to_string()),
-        author_email: author.map(|a| a.email.to_string()),
-        commit_date: author.map(|a| a.time.format(gix::date::time::format::SHORT)),
-        commit_message: message.as_ref().map(|msg| msg.title.to_string()),
-        commit_body: message
-            .as_ref()
-            .and_then(|msg| msg.body.map(|body| body.to_string())),
-    })
 }
 
 // For some reasons the CI is failing on windows with the message "Commits not found".
