@@ -271,6 +271,21 @@ mod test {
         };
     }
 
+    /// We need to use it in `concat!` so we can't use std::path::MAIN_SEPARATOR_STR
+    /// Also, attributes on expressions are experimental so we have to use a whole macro for this
+    #[cfg(windows)]
+    macro_rules! path_separator_literal {
+        () => {
+            "\r\n"
+        };
+    }
+    #[cfg(not(windows))]
+    macro_rules! path_separator_literal {
+        () => {
+            "\n"
+        };
+    }
+
     /// Helper macro to create a history of the same file being modified.
     ///
     /// Each $commit_msg is a unique identifier for a commit message.
@@ -320,6 +335,7 @@ mod test {
                         LineDiff::Delete => removed_lines += 1,
                         LineDiff::None => ()
                     }
+                    dbg!(added_lines, removed_lines, line_number);
                     // if there is no $expected, then we don't care what blame_line returns
                     // because we won't show it to the user.
                     $(
@@ -327,7 +343,7 @@ mod test {
                         let blame_result = blame_line(&file, line_number, added_lines, removed_lines).unwrap().commit_message;
                         assert_eq!(
                             blame_result,
-                            Some(concat!(stringify!($expected), "\n").to_owned()),
+                            Some(concat!(stringify!($expected), path_separator_literal!()).to_owned()),
                             "Blame mismatch\nat commit: {}\nat line: {}\nline contents: {}\nexpected commit: {}\nbut got commit: {}",
                             $commit_msg,
                             line_number,
@@ -408,7 +424,7 @@ mod test {
             //     "  four" delete,
             //     "  two" delete,
             //     "  five" delete,
-            //     "  four" 5,
+            //     "  four",
             //     "}" 1,
             //     "  five" 5,
             //     "  four" 5;
