@@ -1,7 +1,5 @@
-use anyhow::Context as _;
 use anyhow::{anyhow, bail, Result};
 use arc_swap::ArcSwap;
-use git::BlameInformation;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -9,6 +7,7 @@ use std::{
 
 #[cfg(feature = "git")]
 mod git;
+pub use git::FileBlame;
 
 mod diff;
 
@@ -48,21 +47,6 @@ impl DiffProviderRegistry {
                     None
                 }
             })
-    }
-
-    /// Blame a line in a file
-    pub fn blame_line(
-        &self,
-        file: &Path,
-        line: u32,
-        added_lines_count: u32,
-        removed_lines_count: u32,
-    ) -> anyhow::Result<BlameInformation> {
-        self.providers
-            .iter()
-            .map(|provider| provider.blame_line(file, line, added_lines_count, removed_lines_count))
-            .next()
-            .context("No provider found")?
     }
 
     /// Fire-and-forget changed file iteration. Runs everything in a background task. Keeps
@@ -122,20 +106,6 @@ impl DiffProvider {
             #[cfg(feature = "git")]
             Self::Git => git::get_current_head_name(file),
             Self::None => bail!("No diff support compiled in"),
-        }
-    }
-
-    fn blame_line(
-        &self,
-        file: &Path,
-        line: u32,
-        added_lines_count: u32,
-        removed_lines_count: u32,
-    ) -> Result<BlameInformation> {
-        match self {
-            #[cfg(feature = "git")]
-            Self::Git => git::blame_line(file, line, added_lines_count, removed_lines_count),
-            Self::None => bail!("No blame support compiled in"),
         }
     }
 

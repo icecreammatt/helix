@@ -35,6 +35,8 @@ use std::{mem::take, num::NonZeroUsize, path::PathBuf, rc::Rc};
 
 use tui::{buffer::Buffer as Surface, text::Span};
 
+use super::text_decorations::blame::InlineBlame;
+
 pub struct EditorView {
     pub keymaps: Keymaps,
     on_next_key: Option<(OnKeyCallback, OnKeyCallbackKind)>,
@@ -203,7 +205,7 @@ impl EditorView {
         ));
         if config.version_control.inline_blame {
             if let Some(blame) = &doc.blame {
-                decorations.add_decoration(text_decorations::blame::EolBlame::new(
+                decorations.add_decoration(InlineBlame::new(
                     doc,
                     theme,
                     doc.text().char_to_line(primary_cursor),

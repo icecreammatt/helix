@@ -146,7 +146,6 @@ pub struct Document {
     ///
     /// To know if they're up-to-date, check the `id` field in `DocumentInlayHints`.
     pub(crate) inlay_hints: HashMap<ViewId, DocumentInlayHints>,
-    pub blame: Option<String>,
     pub(crate) jump_labels: HashMap<ViewId, Vec<Overlay>>,
     /// Set to `true` when the document is updated, reset to `false` on the next inlay hints
     /// update from the LSP
@@ -196,6 +195,10 @@ pub struct Document {
 
     diff_handle: Option<DiffHandle>,
     version_control_head: Option<Arc<ArcSwap<Box<str>>>>,
+    /// Contains blame information for each line in the file
+    pub file_blame: Option<helix_vcs::FileBlame>,
+    /// Contains the inline blame string
+    pub blame: Option<String>,
 
     // when document was used for most-recent-used buffer picker
     pub focused_at: std::time::Instant,
@@ -705,6 +708,7 @@ impl Document {
             readonly: false,
             jump_labels: HashMap::new(),
             blame: None,
+            file_blame: None,
         }
     }
 

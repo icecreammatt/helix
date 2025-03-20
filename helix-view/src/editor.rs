@@ -1138,6 +1138,7 @@ pub struct Editor {
 
     pub mouse_down_range: Option<Range>,
     pub cursor_cache: CursorCache,
+    pub blame_string: Option<String>,
     pub blame_cache: Option<(ViewId, u32)>,
 }
 
@@ -1268,6 +1269,7 @@ impl Editor {
             mouse_down_range: None,
             cursor_cache: CursorCache::default(),
             blame_cache: None,
+            blame_string: None,
         }
     }
 
@@ -1811,6 +1813,11 @@ impl Editor {
             doc.set_version_control_head(self.diff_providers.get_current_head_name(&path));
 
             let id = self.new_document(doc);
+
+            helix_event::dispatch(DidRequestFileBlameUpdate {
+                editor: self,
+                doc: id,
+            });
             self.launch_language_servers(id);
 
             helix_event::dispatch(DocumentDidOpen {

@@ -11,7 +11,6 @@ use helix_view::{
     align_view,
     document::{DocumentOpenError, DocumentSavedEventResult},
     editor::{ConfigEvent, EditorEvent, TICK_DURATION},
-    events::DidRequestInlineBlame,
     graphics::Rect,
     theme,
     tree::Layout,
@@ -24,6 +23,7 @@ use crate::{
     args::Args,
     compositor::{Compositor, Event},
     config::Config,
+    events::DidRequestInlineBlameUpdate,
     handlers,
     job::Jobs,
     keymap::Keymaps,
@@ -590,7 +590,7 @@ impl Application {
         const INLINE_BLAME_REQUEST_TIME: u128 =
             Duration::from_millis(150).as_nanos() / TICK_DURATION.as_nanos();
         if self.editor.ticks_elapsed % INLINE_BLAME_REQUEST_TIME == 0 {
-            helix_event::dispatch(DidRequestInlineBlame {
+            helix_event::dispatch(DidRequestInlineBlameUpdate {
                 editor: &mut self.editor,
             })
         };

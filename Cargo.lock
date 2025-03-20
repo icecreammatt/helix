@@ -608,6 +608,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gix-blame-test"
+version = "25.1.1"
+dependencies = [
+ "gix",
+]
+
+[[package]]
 name = "gix-chunk"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

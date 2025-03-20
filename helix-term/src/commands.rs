@@ -472,7 +472,6 @@ impl MappableCommand {
         redo, "Redo change",
         earlier, "Move backward in history",
         later, "Move forward in history",
-        line_blame, "Blame for the current line",
         commit_undo_checkpoint, "Commit changes to new checkpoint",
         yank, "Yank selection",
         yank_to_clipboard, "Yank selections to clipboard",
@@ -6558,42 +6557,6 @@ fn replay_macro(cx: &mut Context) {
 
 fn goto_word(cx: &mut Context) {
     jump_to_word(cx, Movement::Move)
-}
-
-fn line_blame(cx: &mut Context) {
-    let (view, doc) = current!(cx.editor);
-    const BLAME_ERROR: &str = "No blame available for the current file";
-    let Some(diff) = doc.diff_handle() else {
-        cx.editor.set_error(BLAME_ERROR);
-        return;
-    };
-
-    let Some(path) = doc.path() else {
-        cx.editor.set_error(BLAME_ERROR);
-        return;
-    };
-
-    let cursor_line = doc.cursor_line(view.id);
-    let (inserted_lines_count, deleted_lines_count) =
-        diff.load().inserted_and_deleted_before_line(cursor_line);
-
-    let Ok(cursor_line) = u32::try_from(doc.cursor_line(view.id)) else {
-        cx.editor.set_error(BLAME_ERROR);
-        return;
-    };
-
-    let Ok(output) = cx.editor.diff_providers.blame_line(
-        path,
-        cursor_line,
-        inserted_lines_count,
-        deleted_lines_count,
-    ) else {
-        cx.editor.set_error(BLAME_ERROR);
-        return;
-    };
-
-    cx.editor
-        .set_status(output.parse_format(&cx.editor.config().version_control.inline_blame_format));
 }
 
 fn extend_to_word(cx: &mut Context) {

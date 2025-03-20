@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use completion::{CompletionEvent, CompletionHandler};
 use helix_event::send_blocking;
-use helix_vcs::DiffProviderRegistry;
 use tokio::sync::mpsc::Sender;
 
 use crate::handlers::lsp::SignatureHelpInvoked;
@@ -20,18 +19,9 @@ pub enum AutoSaveEvent {
 }
 
 #[derive(Debug)]
-pub enum BlameEvent {
-    PostCommand {
-        file: PathBuf,
-        cursor_line: u32,
-        /// How many lines were removed before cursor_line
-        deleted_lines_count: u32,
-        /// How many lines were added before cursor_line
-        inserted_lines_count: u32,
-        diff_providers: DiffProviderRegistry,
-        /// Format of the blame
-        blame_format: String,
-    },
+pub struct BlameEvent {
+    pub path: PathBuf,
+    pub doc_id: DocumentId,
 }
 
 pub struct Handlers {

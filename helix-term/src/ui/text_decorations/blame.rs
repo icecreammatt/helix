@@ -8,16 +8,16 @@ use helix_view::{Document, Theme};
 use crate::ui::document::{LinePos, TextRenderer};
 use crate::ui::text_decorations::Decoration;
 
-pub struct EolBlame<'a> {
+pub struct InlineBlame<'a> {
     message: &'a str,
     doc: &'a Document,
     cursor: usize,
     style: Style,
 }
 
-impl<'a> EolBlame<'a> {
+impl<'a> InlineBlame<'a> {
     pub fn new(doc: &'a Document, theme: &Theme, cursor: usize, message: &'a str) -> Self {
-        EolBlame {
+        InlineBlame {
             style: theme.get("ui.virtual.blame"),
             message,
             doc,
@@ -26,7 +26,7 @@ impl<'a> EolBlame<'a> {
     }
 }
 
-impl Decoration for EolBlame<'_> {
+impl Decoration for InlineBlame<'_> {
     fn render_virt_lines(
         &mut self,
         renderer: &mut TextRenderer,
