@@ -13,7 +13,7 @@ members = [
   "helix-vcs",
   "helix-parsec",
   "helix-stdx",
-  "xtask", "gix-blame-test",
+  "xtask",
 ]
 
 default-members = [

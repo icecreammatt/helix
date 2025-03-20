@@ -81,10 +81,7 @@ impl FileBlame {
     pub fn try_new(doc: PathBuf) -> Result<Self> {
         let repo = get_repo(&doc)?;
 
-        log::error!("a");
-
         let head = repo.head()?.peel_to_commit_in_place()?.id;
-        log::error!("b");
 
         let traverse = gix::traverse::commit::topo::Builder::from_iters(
             &repo.objects,
@@ -92,7 +89,6 @@ impl FileBlame {
             None::<Vec<gix::ObjectId>>,
         )
         .build()?;
-        log::error!("c");
 
         let relative_path = doc
             .strip_prefix(
@@ -103,11 +99,8 @@ impl FileBlame {
             .unwrap_or(&doc)
             .to_str()
             .context("Could not convert path to string")?;
-        log::error!("d");
 
         let mut resource_cache = repo.diff_resource_cache_for_tree_diff()?;
-        log::error!("e");
-        log::error!("relative_path: {relative_path:?}");
 
         let file_blame = gix::blame::file(
             &repo.objects,
@@ -117,7 +110,6 @@ impl FileBlame {
             None,
         )?
         .entries;
-        log::error!("f");
 
         Ok(Self {
             blame: file_blame
