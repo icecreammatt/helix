@@ -253,13 +253,13 @@ mod test {
     /// we wouldl like to exclude any lines that are "delete"
     macro_rules! line_diff_flag_str {
         (insert, $commit_msg:literal, $line:expr) => {
-            concat!($line, "\n")
+            concat!($line, path_separator_literal!())
         };
         (delete, $commit_msg:literal, $line:expr) => {
             ""
         };
         (, $commit_msg:literal, $line:expr) => {
-            concat!($line, "\n")
+            concat!($line, path_separator_literal!())
         };
         ($any:tt, $commit_msg:literal, $line:expr) => {
             compile_error!(concat!(
@@ -335,24 +335,25 @@ mod test {
                         LineDiff::Delete => removed_lines += 1,
                         LineDiff::None => ()
                     }
-                    dbg!(added_lines, removed_lines, line_number);
-                    // if there is no $expected, then we don't care what blame_line returns
-                    // because we won't show it to the user.
-                    $(
+                    if line_diff_flag != LineDiff::Delete {
+                        // if there is no $expected, then we don't care what blame_line returns
+                        // because we won't show it to the user.
+                        $(
 
-                        let blame_result = blame_line(&file, line_number, added_lines, removed_lines).unwrap().commit_message;
-                        assert_eq!(
-                            blame_result,
-                            Some(concat!(stringify!($expected), path_separator_literal!()).to_owned()),
-                            "Blame mismatch\nat commit: {}\nat line: {}\nline contents: {}\nexpected commit: {}\nbut got commit: {}",
-                            $commit_msg,
-                            line_number,
-                            file_content.lines().nth(line_number.try_into().unwrap()).unwrap(),
-                            stringify!($expected),
-                            blame_result.as_ref().map(|blame| blame.trim_end()).unwrap_or("<no commit>")
-                        );
-                    )?
-                    line_number += 1;
+                            let blame_result = blame_line(&file, line_number, added_lines, removed_lines).unwrap().commit_message;
+                            assert_eq!(
+                                blame_result,
+                                Some(concat!(stringify!($expected), path_separator_literal!()).to_owned()),
+                                "Blame mismatch\nat commit: {}\nat line: {}\nline contents: {}\nexpected commit: {}\nbut got commit: {}",
+                                $commit_msg,
+                                line_number,
+                                file_content.lines().nth(line_number.try_into().unwrap()).unwrap(),
+                                stringify!($expected),
+                                blame_result.as_ref().map(|blame| blame.trim_end()).unwrap_or("<no commit>")
+                            );
+                        )?
+                        line_number += 1;
+                    }
                 )*
             )*
         }};
@@ -416,18 +417,18 @@ mod test {
                 "}" 1,
                 "  five" 5,
                 "  four" 5;
-            // 5 no_commit =>
-            //     "  six" 5,
-            //     "  three" 5,
-            //     "fn main() {" delete,
-            //     "  five" delete,
-            //     "  four" delete,
-            //     "  two" delete,
-            //     "  five" delete,
-            //     "  four",
-            //     "}" 1,
-            //     "  five" 5,
-            //     "  four" 5;
+            5 no_commit =>
+                "  six" 5,
+                "  three" 5,
+                "fn main() {" delete,
+                "  five" delete,
+                "  four" delete,
+                "  two" delete,
+                "  five" delete,
+                "  four",
+                "}" 1,
+                "  five" 5,
+                "  four" 5;
         };
     }
 
