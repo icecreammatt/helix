@@ -185,12 +185,10 @@ pub fn blame_line(
     })
 }
 
-// attributes on expressions are not allowed
-// however, in our macro its possible that sometimes the
-// assignment to the mutable variable will not be read.
-//
-// when the last line has no expected blame commit
-#[allow(unused_assignments)]
+// For some reasons the CI is failing on windows with the message "Commits not found".
+// There is nothing windows-specific in this implementation
+// As long as these tests pass on other platforms, on Windows it should work too
+// #[cfg(not(windows))]
 #[cfg(test)]
 mod test {
     use std::fs::File;
@@ -341,6 +339,7 @@ mod test {
 
                 $(
                     let line_diff_flag = line_diff_flag!($($line_diff)?, $commit_msg, $line);
+                    #[allow(unused_assignments)]
                     match line_diff_flag {
                         LineDiff::Insert => added_lines += 1,
                         LineDiff::Delete => removed_lines += 1,
@@ -373,7 +372,10 @@ mod test {
                                     .unwrap_or("<no commit>")
                             );
                         )?
-                        line_number += 1;
+                        #[allow(unused_assignments)]
+                        {
+                            line_number += 1;
+                        }
                     }
                 )*
             )*
@@ -448,7 +450,7 @@ mod test {
                 "  four" delete,
                 "  two" delete,
                 "  five" delete,
-                "  four",
+                "  four" 5,
                 "}" 1,
                 "  five" 5,
                 "  four" 5;
