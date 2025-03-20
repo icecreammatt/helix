@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 use gix::bstr::BStr;
+use helix_core::hashmap;
 use std::{collections::HashMap, path::Path};
 
 use super::{get_repo_dir, open_repo};
@@ -20,14 +21,14 @@ impl BlameInformation {
         let mut formatted = String::new();
         let mut content_before_variable = String::new();
 
-        let variables = HashMap::from([
-            ("commit", &self.commit_hash),
-            ("author", &self.author_name),
-            ("date", &self.commit_date),
-            ("message", &self.commit_message),
-            ("email", &self.author_email),
-            ("body", &self.commit_body),
-        ]);
+        let variables = hashmap! {
+            "commit" => &self.commit_hash,
+            "author" => &self.author_name,
+            "date" => &self.commit_date,
+            "message" => &self.commit_message,
+            "email" => &self.author_email,
+            "body" => &self.commit_body,
+        };
 
         let mut chars = format.chars().peekable();
         // in all cases, when any of the variables is empty we exclude the content before the variable
@@ -259,13 +260,13 @@ mod test {
     /// we would like to exclude any lines that are `delete`
     macro_rules! line_diff_flag_str {
         (insert, $commit_msg:literal, $line:expr) => {
-            concat!($line, path_separator_literal!())
+            concat!($line, newline_literal!())
         };
         (delete, $commit_msg:literal, $line:expr) => {
             ""
         };
         (, $commit_msg:literal, $line:expr) => {
-            concat!($line, path_separator_literal!())
+            concat!($line, newline_literal!())
         };
         ($any:tt, $commit_msg:literal, $line:expr) => {
             compile_error!(concat!(
@@ -279,13 +280,13 @@ mod test {
 
     /// Attributes on expressions are experimental so we have to use a whole macro for this
     #[cfg(windows)]
-    macro_rules! path_separator_literal {
+    macro_rules! newline_literal {
         () => {
             "\r\n"
         };
     }
     #[cfg(not(windows))]
-    macro_rules! path_separator_literal {
+    macro_rules! newline_literal {
         () => {
             "\n"
         };
@@ -354,6 +355,7 @@ mod test {
                         LineDiff::Delete => removed_lines += 1,
                         LineDiff::None => ()
                     }
+                    // completely skip lines that are marked as `delete`
                     if line_diff_flag != LineDiff::Delete {
                         // if there is no $expected, then we don't care what blame_line returns
                         // because we won't show it to the user.
@@ -365,7 +367,7 @@ mod test {
                                     .commit_message;
                             assert_eq!(
                                 blame_result,
-                                Some(concat!(stringify!($expected), path_separator_literal!()).to_owned()),
+                                Some(concat!(stringify!($expected), newline_literal!()).to_owned()),
                                 "Blame mismatch\nat commit: {}\nat line: {}\nline contents: {}\nexpected commit: {}\nbut got commit: {}",
                                 $commit_msg,
                                 line_number,
@@ -390,6 +392,7 @@ mod test {
     #[test]
     pub fn blamed_lines() {
         assert_line_blame_progress! {
+            // initialize
             1 =>
                 "fn main() {" 1,
                 "" 1,
