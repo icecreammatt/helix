@@ -18,6 +18,10 @@ pub struct FileBlame {
     path: PathBuf,
 }
 
+/// Open the repository for the file.
+///
+/// Note: We *could* cache the repository lookup, but in practice this step always takes
+/// <1ms and won't be performed more than 10 times per second (if the user holds down `j` with high key repeat rate)
 pub fn get_repo(path: &Path) -> Result<gix::Repository> {
     Ok(open_repo(get_repo_dir(path)?)
         .context("failed to open git repo")?
