@@ -222,16 +222,48 @@ mod test {
         };
     }
 
-    macro_rules! insert_flag {
+    #[derive(PartialEq, PartialOrd, Ord, Eq)]
+    enum LineDiff {
+        Insert,
+        Delete,
+        None,
+    }
+
+    macro_rules! line_diff_flag {
         (insert, $commit_msg:literal, $line:expr) => {
-            true
+            LineDiff::Insert
+        };
+        (delete, $commit_msg:literal, $line:expr) => {
+            LineDiff::Delete
         };
         (, $commit_msg:literal, $line:expr) => {
-            false
+            LineDiff::None
         };
         ($any:tt, $commit_msg:literal, $line:expr) => {
             compile_error!(concat!(
-                "expected `insert` or nothing for commit ",
+                "expected `insert`, `delete` or nothing for commit ",
+                $commit_msg,
+                " line ",
+                $line
+            ))
+        };
+    }
+
+    /// this utility macro exists because we can't pass a `match` statement into `concat!`
+    /// we wouldl like to exclude any lines that are "delete"
+    macro_rules! line_diff_flag_str {
+        (insert, $commit_msg:literal, $line:expr) => {
+            concat!($line, "\n")
+        };
+        (delete, $commit_msg:literal, $line:expr) => {
+            ""
+        };
+        (, $commit_msg:literal, $line:expr) => {
+            concat!($line, "\n")
+        };
+        ($any:tt, $commit_msg:literal, $line:expr) => {
+            compile_error!(concat!(
+                "expected `insert`, `delete` or nothing for commit ",
                 $commit_msg,
                 " line ",
                 $line
@@ -249,7 +281,7 @@ mod test {
     ///
     /// $commit_msg can also have a `no_commit` ident next to it, in which case this block won't be committed
     macro_rules! assert_line_blame_progress {
-        ($($commit_msg:literal $($no_commit:ident)? => $($line:literal $($expected:literal)? $($added:ident)? ),+);+ $(;)?) => {{
+        ($($commit_msg:literal $($no_commit:ident)? => $($line:literal $($expected:literal)? $($line_diff:ident)? ),+);+ $(;)?) => {{
             use std::fs::OpenOptions;
             use std::io::Write;
 
@@ -257,40 +289,42 @@ mod test {
             let file = repo.path().join("file.txt");
             File::create(&file).expect("could not create file");
 
-            let write_file = |content: &str| {
+            $(
+                let file_content = concat!(
+                    $(
+                        line_diff_flag_str!($($line_diff)?, $commit_msg, $line),
+                    )*
+                );
+                eprintln!("at commit {}:\n\n{file_content}", stringify!($commit_msg));
+
                 let mut f = OpenOptions::new()
                     .write(true)
                     .truncate(true)
                     .open(&file)
                     .unwrap();
-                f.write_all(content.as_bytes()).unwrap();
-            };
-
-            let commit = |msg| create_commit_with_message(repo.path(), true, msg);
-
-            $(
-                let file_content = concat!($($line, "\n"),*);
-                eprintln!("at commit {}:\n\n{file_content}", stringify!($commit_msg));
-                write_file(file_content);
+                f.write_all(file_content.as_bytes()).unwrap();
 
                 let should_commit = no_commit_flag!($($no_commit)?, $commit_msg);
                 if should_commit {
-                    commit(stringify!($commit_msg));
+                    create_commit_with_message(repo.path(), true, stringify!($commit_msg));
                 }
 
                 let mut line_number = 0;
                 let mut added_lines = 0;
+                let mut removed_lines = 0;
 
                 $(
-                    let has_add_flag = insert_flag!($($added)?, $commit_msg, $line);
-                    if has_add_flag {
-                        added_lines += 1;
+                    let line_diff_flag = line_diff_flag!($($line_diff)?, $commit_msg, $line);
+                    match line_diff_flag {
+                        LineDiff::Insert => added_lines += 1,
+                        LineDiff::Delete => removed_lines += 1,
+                        LineDiff::None => ()
                     }
                     // if there is no $expected, then we don't care what blame_line returns
                     // because we won't show it to the user.
                     $(
 
-                        let blame_result = blame_line(&file, line_number, added_lines, 0).unwrap().commit_message;
+                        let blame_result = blame_line(&file, line_number, added_lines, removed_lines).unwrap().commit_message;
                         assert_eq!(
                             blame_result,
                             Some(concat!(stringify!($expected), "\n").to_owned()),
@@ -332,14 +366,14 @@ mod test {
                 "  two" 3,
                 "}" 1;
             // when a line is inserted in-between the blame order is preserved
-            0 no_commit =>
+            4 no_commit =>
                 "fn main() {" 1,
                 "  hello world" insert,
                 "  two" 3,
                 "}" 1;
             // Having a bunch of random lines interspersed should not change which lines
             // have blame for which commits
-            0 no_commit =>
+            4 no_commit =>
                 "  six" insert,
                 "  three" insert,
                 "fn main() {" 1,
@@ -366,6 +400,18 @@ mod test {
                 "}" 1,
                 "  five" 5,
                 "  four" 5;
+            // 5 no_commit =>
+            //     "  six" 5,
+            //     "  three" 5,
+            //     "fn main() {" delete,
+            //     "  five" delete,
+            //     "  four" delete,
+            //     "  two" delete,
+            //     "  five" delete,
+            //     "  four" 5,
+            //     "}" 1,
+            //     "  five" 5,
+            //     "  four" 5;
         };
     }
 
