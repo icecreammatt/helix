@@ -10,7 +10,8 @@ use helix_stdx::path::get_relative_path;
 use helix_view::{
     align_view,
     document::{DocumentOpenError, DocumentSavedEventResult},
-    editor::{ConfigEvent, EditorEvent},
+    editor::{ConfigEvent, EditorEvent, TICK_DURATION},
+    events::DidRequestInlineBlame,
     graphics::Rect,
     theme,
     tree::Layout,
@@ -32,7 +33,7 @@ use crate::{
 use log::{debug, error, info, warn};
 #[cfg(not(feature = "integration"))]
 use std::io::stdout;
-use std::{io::stdin, path::Path, sync::Arc};
+use std::{io::stdin, path::Path, sync::Arc, time::Duration};
 
 #[cfg(not(windows))]
 use anyhow::Context;
@@ -583,6 +584,18 @@ impl Application {
         ));
     }
 
+    async fn handle_tick(&mut self) {
+        self.editor.ticks_elapsed += 1;
+        // request an inline blame refresh every this amount of ticks
+        const INLINE_BLAME_REQUEST_TIME: u128 =
+            Duration::from_millis(150).as_nanos() / TICK_DURATION.as_nanos();
+        if self.editor.ticks_elapsed % INLINE_BLAME_REQUEST_TIME == 0 {
+            helix_event::dispatch(DidRequestInlineBlame {
+                editor: &mut self.editor,
+            })
+        };
+    }
+
     #[inline(always)]
     pub async fn handle_editor_event(&mut self, event: EditorEvent) -> bool {
         log::debug!("received editor event: {:?}", event);
@@ -618,6 +631,9 @@ impl Application {
                 {
                     return true;
                 }
+            }
+            EditorEvent::Tick => {
+                self.handle_tick().await;
             }
         }
 
