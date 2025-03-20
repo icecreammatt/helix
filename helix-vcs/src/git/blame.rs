@@ -417,6 +417,7 @@ mod test {
                 "}" 1,
                 "  five" 5,
                 "  four" 5;
+            // several lines deleted
             5 no_commit =>
                 "  six" 5,
                 "  three" 5,
@@ -426,6 +427,14 @@ mod test {
                 "  two" delete,
                 "  five" delete,
                 "  four",
+                "}" 1,
+                "  five" 5,
+                "  four" 5;
+            // committing the deleted changes
+            6 =>
+                "  six" 5,
+                "  three" 5,
+                "  four" 5,
                 "}" 1,
                 "  five" 5,
                 "  four" 5;
