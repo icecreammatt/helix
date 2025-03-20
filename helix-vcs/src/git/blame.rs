@@ -1,7 +1,7 @@
 use anyhow::Context as _;
 use gix::bstr::BStr;
 use helix_core::hashmap;
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 use super::{get_repo_dir, open_repo};
 
@@ -77,16 +77,7 @@ impl BlameInformation {
                 );
 
                 match variable_value {
-                    Variable::Valid(value) => {
-                        if exclude_content_after_variable {
-                            // don't push anything.
-                            exclude_content_after_variable = false;
-                        } else {
-                            formatted.push_str(&content_before_variable);
-                        }
-                        formatted.push_str(&value);
-                    }
-                    Variable::Invalid(value) => {
+                    Variable::Valid(value) | Variable::Invalid(value) => {
                         if exclude_content_after_variable {
                             // don't push anything.
                             exclude_content_after_variable = false;
