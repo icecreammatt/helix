@@ -209,22 +209,26 @@ impl EditorView {
 
             // do not render inline blame for empty lines to reduce visual noise
             if doc.text().line(cursor_line_idx) != doc.line_ending.as_str() {
-                let (ins, del) = doc
-                    .diff_handle()
-                    .map(|handle| {
+                // do not render inline blame if the line is part of an insertion
+                if let Some((ins, del)) = doc.diff_handle().map_or(
+                    // in theory there can be situations where we don't have the diff for a file
+                    // but we have the blame. In this case, we can just act like there is no diff
+                    Some((0, 0)),
+                    |handle| {
                         handle
                             .load()
                             .inserted_and_deleted_before_line(cursor_line_idx)
-                    })
-                    .unwrap_or_default();
-                if let Some(Ok(blame)) = doc.file_blame.as_ref().map(|fb_result| {
-                    fb_result.as_ref().map(|fb| {
-                        fb.blame_for_line(cursor_line_idx as u32, ins, del)
-                            .parse_format(&config.inline_blame.format)
-                    })
-                }) {
-                    decorations.add_decoration(InlineBlame::new(theme, cursor_line_idx, blame));
-                }
+                    },
+                ) {
+                    if let Some(Ok(blame)) = doc.file_blame.as_ref().map(|fb_result| {
+                        fb_result.as_ref().map(|fb| {
+                            fb.blame_for_line(cursor_line_idx as u32, ins, del)
+                                .parse_format(&config.inline_blame.format)
+                        })
+                    }) {
+                        decorations.add_decoration(InlineBlame::new(theme, cursor_line_idx, blame));
+                    }
+                };
             }
         }
 

@@ -3480,10 +3480,15 @@ fn inline_blame(cx: &mut Context) {
         return;
     };
     let cursor_line = doc.cursor_line(view.id);
-    let (inserted_lines, deleted_lines) = doc
-        .diff_handle()
-        .map(|handle| handle.load().inserted_and_deleted_before_line(cursor_line))
-        .unwrap_or_default();
+    let (inserted_lines, deleted_lines) = match doc.diff_handle().map_or(Some((0, 0)), |handle| {
+        handle.load().inserted_and_deleted_before_line(cursor_line)
+    }) {
+        Some(diff) => diff,
+        None => {
+            cx.editor.set_status("Not committed yet");
+            return;
+        }
+    };
 
     let blame = match blame {
         Ok(blame) => blame.blame_for_line(cursor_line as u32, inserted_lines, deleted_lines),
