@@ -13,12 +13,8 @@ use crate::job;
 
 #[derive(Default)]
 pub struct BlameHandler {
-    worker: Option<WorkerHandle>,
+    worker: Option<oneshot::Receiver<anyhow::Result<FileBlame>>>,
     doc_id: DocumentId,
-}
-
-struct WorkerHandle {
-    completion_rx: oneshot::Receiver<anyhow::Result<FileBlame>>,
 }
 
 impl helix_event::AsyncHook for BlameHandler {
@@ -30,7 +26,7 @@ impl helix_event::AsyncHook for BlameHandler {
         _timeout: Option<tokio::time::Instant>,
     ) -> Option<tokio::time::Instant> {
         if let Some(worker) = &mut self.worker {
-            if worker.completion_rx.try_recv().is_ok() {
+            if worker.try_recv().is_ok() {
                 self.finish_debounce();
                 return None;
             }
@@ -44,7 +40,7 @@ impl helix_event::AsyncHook for BlameHandler {
             let _ = completion_tx.send(result);
         });
 
-        self.worker = Some(WorkerHandle { completion_rx });
+        self.worker = Some(completion_rx);
 
         Some(Instant::now() + Duration::from_millis(50))
     }
@@ -53,7 +49,7 @@ impl helix_event::AsyncHook for BlameHandler {
         let doc_id = self.doc_id;
         if let Some(worker) = self.worker.take() {
             tokio::spawn(async move {
-                let Ok(result) = worker.completion_rx.await else {
+                let Ok(result) = worker.await else {
                     return;
                 };
 

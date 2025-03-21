@@ -206,7 +206,6 @@ impl EditorView {
 
         if config.version_control.inline_blame {
             let cursor_line = doc.cursor_line(view.id);
-            log::error!("{:?}", doc.file_blame);
             if let Some(blame) = doc
                 .diff_handle()
                 .map(|handle| handle.load().inserted_and_deleted_before_line(cursor_line))

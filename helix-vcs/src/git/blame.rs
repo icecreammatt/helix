@@ -21,7 +21,8 @@ pub struct FileBlame {
 /// Open the repository for the file.
 ///
 /// Note: We *could* cache the repository lookup, but in practice this step always takes
-/// <1ms and won't be performed more than 10 times per second (if the user holds down `j` with high key repeat rate)
+/// <1ms and won't be performed more than 10 times per second (if the user holds down `j` with high key repeat rate
+/// and inline git blame enabled)
 pub fn get_repo(path: &Path) -> Result<gix::Repository> {
     Ok(open_repo(get_repo_dir(path)?)
         .context("failed to open git repo")?
@@ -237,275 +238,279 @@ impl LineBlame {
 #[cfg(not(windows))]
 #[cfg(test)]
 mod test {
-    use super::LineBlame;
+    use super::*;
+    use crate::git::test::create_commit_with_message;
+    use crate::git::test::empty_git_repo;
+    use std::fs::File;
 
-    // /// describes how a line was modified
-    // #[derive(PartialEq, PartialOrd, Ord, Eq)]
-    // enum LineDiff {
-    //     /// this line is added
-    //     Insert,
-    //     /// this line is deleted
-    //     Delete,
-    //     /// no changes for this line
-    //     None,
-    // }
+    /// describes how a line was modified
+    #[derive(PartialEq, PartialOrd, Ord, Eq)]
+    enum LineDiff {
+        /// this line is added
+        Insert,
+        /// this line is deleted
+        Delete,
+        /// no changes for this line
+        None,
+    }
 
-    // /// checks if the first argument is `no_commit` or not
-    // macro_rules! no_commit_flag {
-    //     (no_commit, $commit_msg:literal) => {
-    //         false
-    //     };
-    //     (, $commit_msg:literal) => {
-    //         true
-    //     };
-    //     ($any:tt, $commit_msg:literal) => {
-    //         compile_error!(concat!(
-    //             "expected `no_commit` or nothing for commit ",
-    //             $commit_msg
-    //         ))
-    //     };
-    // }
+    /// checks if the first argument is `no_commit` or not
+    macro_rules! no_commit_flag {
+        (no_commit, $commit_msg:literal) => {
+            false
+        };
+        (, $commit_msg:literal) => {
+            true
+        };
+        ($any:tt, $commit_msg:literal) => {
+            compile_error!(concat!(
+                "expected `no_commit` or nothing for commit ",
+                $commit_msg
+            ))
+        };
+    }
 
-    // /// checks if the first argument is `insert` or `delete`
-    // macro_rules! line_diff_flag {
-    //     (insert, $commit_msg:literal, $line:expr) => {
-    //         LineDiff::Insert
-    //     };
-    //     (delete, $commit_msg:literal, $line:expr) => {
-    //         LineDiff::Delete
-    //     };
-    //     (, $commit_msg:literal, $line:expr) => {
-    //         LineDiff::None
-    //     };
-    //     ($any:tt, $commit_msg:literal, $line:expr) => {
-    //         compile_error!(concat!(
-    //             "expected `insert`, `delete` or nothing for commit ",
-    //             $commit_msg,
-    //             " line ",
-    //             $line
-    //         ))
-    //     };
-    // }
+    /// checks if the first argument is `insert` or `delete`
+    macro_rules! line_diff_flag {
+        (insert, $commit_msg:literal, $line:expr) => {
+            LineDiff::Insert
+        };
+        (delete, $commit_msg:literal, $line:expr) => {
+            LineDiff::Delete
+        };
+        (, $commit_msg:literal, $line:expr) => {
+            LineDiff::None
+        };
+        ($any:tt, $commit_msg:literal, $line:expr) => {
+            compile_error!(concat!(
+                "expected `insert`, `delete` or nothing for commit ",
+                $commit_msg,
+                " line ",
+                $line
+            ))
+        };
+    }
 
-    // /// This macro exists because we can't pass a `match` statement into `concat!`
-    // /// we would like to exclude any lines that are `delete`
-    // macro_rules! line_diff_flag_str {
-    //     (insert, $commit_msg:literal, $line:expr) => {
-    //         concat!($line, newline_literal!())
-    //     };
-    //     (delete, $commit_msg:literal, $line:expr) => {
-    //         ""
-    //     };
-    //     (, $commit_msg:literal, $line:expr) => {
-    //         concat!($line, newline_literal!())
-    //     };
-    //     ($any:tt, $commit_msg:literal, $line:expr) => {
-    //         compile_error!(concat!(
-    //             "expected `insert`, `delete` or nothing for commit ",
-    //             $commit_msg,
-    //             " line ",
-    //             $line
-    //         ))
-    //     };
-    // }
+    /// This macro exists because we can't pass a `match` statement into `concat!`
+    /// we would like to exclude any lines that are `delete`
+    macro_rules! line_diff_flag_str {
+        (insert, $commit_msg:literal, $line:expr) => {
+            concat!($line, newline_literal!())
+        };
+        (delete, $commit_msg:literal, $line:expr) => {
+            ""
+        };
+        (, $commit_msg:literal, $line:expr) => {
+            concat!($line, newline_literal!())
+        };
+        ($any:tt, $commit_msg:literal, $line:expr) => {
+            compile_error!(concat!(
+                "expected `insert`, `delete` or nothing for commit ",
+                $commit_msg,
+                " line ",
+                $line
+            ))
+        };
+    }
 
-    // /// Attributes on expressions are experimental so we have to use a whole macro for this
-    // #[cfg(windows)]
-    // macro_rules! newline_literal {
-    //     () => {
-    //         "\r\n"
-    //     };
-    // }
-    // #[cfg(not(windows))]
-    // macro_rules! newline_literal {
-    //     () => {
-    //         "\n"
-    //     };
-    // }
+    /// Attributes on expressions are experimental so we have to use a whole macro for this
+    #[cfg(windows)]
+    macro_rules! newline_literal {
+        () => {
+            "\r\n"
+        };
+    }
+    #[cfg(not(windows))]
+    macro_rules! newline_literal {
+        () => {
+            "\n"
+        };
+    }
 
-    // /// Helper macro to create a history of the same file being modified.
-    // macro_rules! assert_line_blame_progress {
-    //     (
-    //         $(
-    //             // a unique identifier for the commit, other commits must not use this
-    //             // If `no_commit` option is used, use the identifier of the previous commit
-    //             $commit_msg:literal
-    //             // must be `no_commit` if exists.
-    //             // If exists, this block won't be committed
-    //             $($no_commit:ident)? =>
-    //             $(
-    //                 // contents of a line in the file
-    //                 $line:literal
-    //                 // what commit identifier we are expecting for this line
-    //                 $($expected:literal)?
-    //                 // must be `insert` or `delete` if exists
-    //                 // if exists, must be used with `no_commit`
-    //                 // - `insert`: this line is added
-    //                 // - `delete`: this line is deleted
-    //                 $($line_diff:ident)?
-    //             ),+
-    //         );+
-    //         $(;)?
-    //     ) => {{
-    //         use std::fs::OpenOptions;
-    //         use std::io::Write;
+    /// Helper macro to create a history of the same file being modified.
+    macro_rules! assert_line_blame_progress {
+        (
+            $(
+                // a unique identifier for the commit, other commits must not use this
+                // If `no_commit` option is used, use the identifier of the previous commit
+                $commit_msg:literal
+                // must be `no_commit` if exists.
+                // If exists, this block won't be committed
+                $($no_commit:ident)? =>
+                $(
+                    // contents of a line in the file
+                    $line:literal
+                    // what commit identifier we are expecting for this line
+                    $($expected:literal)?
+                    // must be `insert` or `delete` if exists
+                    // if exists, must be used with `no_commit`
+                    // - `insert`: this line is added
+                    // - `delete`: this line is deleted
+                    $($line_diff:ident)?
+                ),+
+            );+
+            $(;)?
+        ) => {{
+            use std::fs::OpenOptions;
+            use std::io::Write;
 
-    //         let repo = empty_git_repo();
-    //         let file = repo.path().join("file.txt");
-    //         File::create(&file).expect("could not create file");
+            let repo = empty_git_repo();
+            let file = repo.path().join("file.txt");
+            File::create(&file).expect("could not create file");
 
-    //         $(
-    //             let file_content = concat!(
-    //                 $(
-    //                     line_diff_flag_str!($($line_diff)?, $commit_msg, $line),
-    //                 )*
-    //             );
-    //             eprintln!("at commit {}:\n\n{file_content}", stringify!($commit_msg));
+            $(
+                let file_content = concat!(
+                    $(
+                        line_diff_flag_str!($($line_diff)?, $commit_msg, $line),
+                    )*
+                );
+                eprintln!("at commit {}:\n\n{file_content}", stringify!($commit_msg));
 
-    //             let mut f = OpenOptions::new()
-    //                 .write(true)
-    //                 .truncate(true)
-    //                 .open(&file)
-    //                 .unwrap();
+                let mut f = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(&file)
+                    .unwrap();
 
-    //             f.write_all(file_content.as_bytes()).unwrap();
+                f.write_all(file_content.as_bytes()).unwrap();
 
-    //             let should_commit = no_commit_flag!($($no_commit)?, $commit_msg);
-    //             if should_commit {
-    //                 create_commit_with_message(repo.path(), true, stringify!($commit_msg));
-    //             }
+                let should_commit = no_commit_flag!($($no_commit)?, $commit_msg);
+                if should_commit {
+                    create_commit_with_message(repo.path(), true, stringify!($commit_msg));
+                }
 
-    //             let mut line_number = 0;
-    //             let mut added_lines = 0;
-    //             let mut removed_lines = 0;
+                let mut line_number = 0;
+                let mut added_lines = 0;
+                let mut removed_lines = 0;
 
-    //             $(
-    //                 let line_diff_flag = line_diff_flag!($($line_diff)?, $commit_msg, $line);
-    //                 #[allow(unused_assignments)]
-    //                 match line_diff_flag {
-    //                     LineDiff::Insert => added_lines += 1,
-    //                     LineDiff::Delete => removed_lines += 1,
-    //                     LineDiff::None => ()
-    //                 }
-    //                 // completely skip lines that are marked as `delete`
-    //                 if line_diff_flag != LineDiff::Delete {
-    //                     // if there is no $expected, then we don't care what blame_line returns
-    //                     // because we won't show it to the user.
-    //                     $(
+                $(
+                    let line_diff_flag = line_diff_flag!($($line_diff)?, $commit_msg, $line);
+                    #[allow(unused_assignments)]
+                    match line_diff_flag {
+                        LineDiff::Insert => added_lines += 1,
+                        LineDiff::Delete => removed_lines += 1,
+                        LineDiff::None => ()
+                    }
+                    // completely skip lines that are marked as `delete`
+                    if line_diff_flag != LineDiff::Delete {
+                        // if there is no $expected, then we don't care what blame_line returns
+                        // because we won't show it to the user.
+                        $(
+                            let blame_result =
+                                FileBlame::try_new(file.clone())
+                                    .unwrap()
+                                    .blame_for_line(line_number, added_lines, removed_lines)
+                                    .commit_message;
 
-    //                         let blame_result =
-    //                             blame_line(&file, line_number, added_lines, removed_lines)
-    //                                 .unwrap()
-    //                                 .commit_message;
-    //                         assert_eq!(
-    //                             blame_result,
-    //                             Some(concat!(stringify!($expected), newline_literal!()).to_owned()),
-    //                             "Blame mismatch\nat commit: {}\nat line: {}\nline contents: {}\nexpected commit: {}\nbut got commit: {}",
-    //                             $commit_msg,
-    //                             line_number,
-    //                             file_content
-    //                                 .lines()
-    //                                 .nth(line_number.try_into().unwrap())
-    //                                 .unwrap(),
-    //                             stringify!($expected),
-    //                             blame_result
-    //                                 .as_ref()
-    //                                 .map(|blame| blame.trim_end())
-    //                                 .unwrap_or("<no commit>")
-    //                         );
-    //                     )?
-    //                     #[allow(unused_assignments)]
-    //                     {
-    //                         line_number += 1;
-    //                     }
-    //                 }
-    //             )*
-    //         )*
-    //     }};
-    // }
+                            assert_eq!(
+                                blame_result,
+                                Some(concat!(stringify!($expected), newline_literal!()).to_owned()),
+                                "Blame mismatch\nat commit: {}\nat line: {}\nline contents: {}\nexpected commit: {}\nbut got commit: {}",
+                                $commit_msg,
+                                line_number,
+                                file_content
+                                    .lines()
+                                    .nth(line_number.try_into().unwrap())
+                                    .unwrap(),
+                                stringify!($expected),
+                                blame_result
+                                    .as_ref()
+                                    .map(|blame| blame.trim_end())
+                                    .unwrap_or("<no commit>")
+                            );
+                        )?
+                        #[allow(unused_assignments)]
+                        {
+                            line_number += 1;
+                        }
+                    }
+                )*
+            )*
+        }};
+    }
 
-    // #[test]
-    // pub fn blamed_lines() {
-    //     assert_line_blame_progress! {
-    //         // initialize
-    //         1 =>
-    //             "fn main() {" 1,
-    //             "" 1,
-    //             "}" 1;
-    //         // modifying a line works
-    //         2 =>
-    //             "fn main() {" 1,
-    //             "  one" 2,
-    //             "}" 1;
-    //         // inserting a line works
-    //         3 =>
-    //             "fn main() {" 1,
-    //             "  one" 2,
-    //             "  two" 3,
-    //             "}" 1;
-    //         // deleting a line works
-    //         4 =>
-    //             "fn main() {" 1,
-    //             "  two" 3,
-    //             "}" 1;
-    //         // when a line is inserted in-between the blame order is preserved
-    //         4 no_commit =>
-    //             "fn main() {" 1,
-    //             "  hello world" insert,
-    //             "  two" 3,
-    //             "}" 1;
-    //         // Having a bunch of random lines interspersed should not change which lines
-    //         // have blame for which commits
-    //         4 no_commit =>
-    //             "  six" insert,
-    //             "  three" insert,
-    //             "fn main() {" 1,
-    //             "  five" insert,
-    //             "  four" insert,
-    //             "  two" 3,
-    //             "  five" insert,
-    //             "  four" insert,
-    //             "}" 1,
-    //             "  five" insert,
-    //             "  four" insert;
-    //         // committing all of those insertions should recognize that they are
-    //         // from the current commit, while still keeping the information about
-    //         // previous commits
-    //         5 =>
-    //             "  six" 5,
-    //             "  three" 5,
-    //             "fn main() {" 1,
-    //             "  five" 5,
-    //             "  four" 5,
-    //             "  two" 3,
-    //             "  five" 5,
-    //             "  four" 5,
-    //             "}" 1,
-    //             "  five" 5,
-    //             "  four" 5;
-    //         // several lines deleted
-    //         5 no_commit =>
-    //             "  six" 5,
-    //             "  three" 5,
-    //             "fn main() {" delete,
-    //             "  five" delete,
-    //             "  four" delete,
-    //             "  two" delete,
-    //             "  five" delete,
-    //             "  four" 5,
-    //             "}" 1,
-    //             "  five" 5,
-    //             "  four" 5;
-    //         // committing the deleted changes
-    //         6 =>
-    //             "  six" 5,
-    //             "  three" 5,
-    //             "  four" 5,
-    //             "}" 1,
-    //             "  five" 5,
-    //             "  four" 5;
-    //     };
-    // }
+    #[test]
+    pub fn blamed_lines() {
+        assert_line_blame_progress! {
+            // initialize
+            1 =>
+                "fn main() {" 1,
+                "" 1,
+                "}" 1;
+            // modifying a line works
+            2 =>
+                "fn main() {" 1,
+                "  one" 2,
+                "}" 1;
+            // inserting a line works
+            3 =>
+                "fn main() {" 1,
+                "  one" 2,
+                "  two" 3,
+                "}" 1;
+            // deleting a line works
+            4 =>
+                "fn main() {" 1,
+                "  two" 3,
+                "}" 1;
+            // when a line is inserted in-between the blame order is preserved
+            4 no_commit =>
+                "fn main() {" 1,
+                "  hello world" insert,
+                "  two" 3,
+                "}" 1;
+            // Having a bunch of random lines interspersed should not change which lines
+            // have blame for which commits
+            4 no_commit =>
+                "  six" insert,
+                "  three" insert,
+                "fn main() {" 1,
+                "  five" insert,
+                "  four" insert,
+                "  two" 3,
+                "  five" insert,
+                "  four" insert,
+                "}" 1,
+                "  five" insert,
+                "  four" insert;
+            // committing all of those insertions should recognize that they are
+            // from the current commit, while still keeping the information about
+            // previous commits
+            5 =>
+                "  six" 5,
+                "  three" 5,
+                "fn main() {" 1,
+                "  five" 5,
+                "  four" 5,
+                "  two" 3,
+                "  five" 5,
+                "  four" 5,
+                "}" 1,
+                "  five" 5,
+                "  four" 5;
+            // several lines deleted
+            5 no_commit =>
+                "  six" 5,
+                "  three" 5,
+                "fn main() {" delete,
+                "  five" delete,
+                "  four" delete,
+                "  two" delete,
+                "  five" delete,
+                "  four" 5,
+                "}" 1,
+                "  five" 5,
+                "  four" 5;
+            // committing the deleted changes
+            6 =>
+                "  six" 5,
+                "  three" 5,
+                "  four" 5,
+                "}" 1,
+                "  five" 5,
+                "  four" 5;
+        };
+    }
 
     fn bob() -> LineBlame {
         LineBlame {
