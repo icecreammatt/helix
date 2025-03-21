@@ -3,34 +3,21 @@ use anyhow::Result;
 use gix::bstr::BStr;
 use helix_core::hashmap;
 use std::collections::HashMap;
-use std::path::Path;
 use std::path::PathBuf;
 
 use super::{get_repo_dir, open_repo};
 
-/// A struct that stores information about blame for the current file
-/// We compute the blame all at once asynchonously when the document is loaded.
+/// Stores information about the blame for a file
 #[derive(Debug)]
 pub struct FileBlame {
-    /// usize = 0-based line number
-    /// ObjectId = the id of the commit for this line
+    /// A map from line numbers to commit IDs
     blame: HashMap<u32, gix::ObjectId>,
-    path: PathBuf,
-}
-
-/// Open the repository for the file.
-///
-/// Note: We *could* cache the repository lookup, but in practice this step always takes
-/// <1ms and won't be performed more than 10 times per second (if the user holds down `j` with high key repeat rate
-/// and inline git blame enabled)
-pub fn get_repo(path: &Path) -> Result<gix::Repository> {
-    Ok(open_repo(get_repo_dir(path)?)
-        .context("failed to open git repo")?
-        .to_thread_local())
+    /// The owning repository for this file's `ObjectId`s
+    repo: gix::ThreadSafeRepository,
 }
 
 impl FileBlame {
-    /// Get the blame information corresponing to a line in the document
+    /// Get the blame information corresponing to a line in file
     #[must_use]
     pub fn blame_for_line(
         &self,
@@ -50,12 +37,11 @@ impl FileBlame {
         // the blame will be incorrect. But that's fine, because when the cursor_line is on some hunk,
         // we can show to the user nothing at all. This is detected in the editor
         let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count;
-        let repo = get_repo(&self.path).ok();
+        let repo = self.repo.to_thread_local();
         let commit = self
             .blame
             .get(&blame_line)
-            .zip(repo.as_ref())
-            .and_then(|(obj, repo)| repo.find_commit(*obj).ok());
+            .and_then(|obj| repo.find_commit(*obj).ok());
 
         let message = commit.as_ref().and_then(|c| c.message().ok());
         let author = commit.as_ref().and_then(|c| c.author().ok());
@@ -74,17 +60,17 @@ impl FileBlame {
         }
     }
 
-    /// When you open a document, you'll get access to all of the objects for the repo
-    /// this document belongs to
-    ///
-    /// You can then use these objects to compute the blame
+    /// Compute the blame for the file
     ///
     /// # Performance considerations
     ///
     /// This function is computationally expensive to perform and such should only be called
     /// in a non-blocking environment
-    pub fn try_new(doc: PathBuf) -> Result<Self> {
-        let repo = get_repo(&doc)?;
+    pub fn try_new(file: PathBuf) -> Result<Self> {
+        let thread_safe_repo =
+            open_repo(get_repo_dir(&file)?).context("failed to open git repo")?;
+
+        let repo = thread_safe_repo.to_thread_local();
 
         let head = repo.head()?.peel_to_commit_in_place()?.id;
 
@@ -95,13 +81,14 @@ impl FileBlame {
         )
         .build()?;
 
-        let relative_path = doc
+        let relative_path = file
             .strip_prefix(
-                repo.path()
+                thread_safe_repo
+                    .path()
                     .parent()
                     .context("Could not get parent path of repository")?,
             )
-            .unwrap_or(&doc)
+            .unwrap_or(&file)
             .to_str()
             .context("Could not convert path to string")?;
 
@@ -124,7 +111,7 @@ impl FileBlame {
                         .map(move |i| (i, blame.commit_id))
                 })
                 .collect(),
-            path: doc,
+            repo: thread_safe_repo,
         })
     }
 }

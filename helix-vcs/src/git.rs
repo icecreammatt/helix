@@ -35,6 +35,8 @@ pub fn get_diff_base(file: &Path) -> Result<Vec<u8>> {
     debug_assert!(file.is_absolute());
     let file = gix::path::realpath(file).context("resolve symlinks")?;
 
+    // TODO cache repository lookup
+
     let repo_dir = get_repo_dir(&file)?;
     let repo = open_repo(repo_dir)
         .context("failed to open git repo")?
