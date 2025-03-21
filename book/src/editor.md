@@ -166,7 +166,7 @@ The following statusline elements can be configured:
 | Key     | Description                                | Default |
 | ------- | ------------------------------------------ | ------- |
 | `enable` | Enable inline blame | `false` |
-| `format` | The format in which to show the inline blame | `"{author}, {date} • {message} • {commit}"` |
+| `format` | The format in which to show the inline blame | `"{author}, {time_ago} • {message} • {commit}"` |
 
 For `inline-blame-format`, you can use specific variables like so: `{variable}`.
 
@@ -174,6 +174,7 @@ These are the available variables:
 
 - `author`: The author of the commit
 - `date`: When the commit was made
+- `time-ago`: How long ago the commit was made
 - `message`: The message of the commit, excluding the body
 - `body`: The body of the commit
 - `commit`: The short hex SHA1 hash of the commit

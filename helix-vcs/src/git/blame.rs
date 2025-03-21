@@ -18,6 +18,62 @@ pub struct FileBlame {
     repo: gix::ThreadSafeRepository,
 }
 
+/// Formats a timestamp into a human-readable relative time string.
+///
+/// # Arguments
+///
+/// * `seconds` - Seconds since UNIX epoch (UTC)
+/// * `offset` - Timezone offset in seconds
+///
+/// # Returns
+///
+/// A String representing the relative time (e.g., "4 years ago")
+pub fn format_relative_time(seconds: i64, offset: i32) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    let adjusted_seconds = seconds + offset as i64;
+    let adjusted_now = now + offset as i64;
+
+    let diff = if adjusted_now > adjusted_seconds {
+        adjusted_now - adjusted_seconds
+    } else {
+        // If the time is somehow in the future, treat as "0 seconds ago".
+        0
+    };
+
+    const SECOND: i64 = 1;
+    const MINUTE: i64 = 60 * SECOND;
+    const HOUR: i64 = 60 * MINUTE;
+    const DAY: i64 = 24 * HOUR;
+    const MONTH: i64 = 30 * DAY;
+    const YEAR: i64 = 365 * DAY;
+
+    let (value, unit) = if diff >= YEAR {
+        let years = diff / YEAR;
+        (years, if years == 1 { "year" } else { "years" })
+    } else if diff >= MONTH {
+        let months = diff / MONTH;
+        (months, if months == 1 { "month" } else { "months" })
+    } else if diff >= DAY {
+        let days = diff / DAY;
+        (days, if days == 1 { "day" } else { "days" })
+    } else if diff >= HOUR {
+        let hours = diff / HOUR;
+        (hours, if hours == 1 { "hour" } else { "hours" })
+    } else if diff >= MINUTE {
+        let minutes = diff / MINUTE;
+        (minutes, if minutes == 1 { "minute" } else { "minutes" })
+    } else {
+        let seconds = diff / SECOND;
+        (seconds, if seconds == 1 { "second" } else { "seconds" })
+    };
+
+    format!("{} {} ago", value, unit)
+}
+
 impl FileBlame {
     /// Get the blame information corresponing to a line in file and diff for that line
     ///
@@ -92,6 +148,7 @@ impl FileBlame {
             commit_body: message
                 .as_ref()
                 .and_then(|msg| msg.body.map(|body| body.to_string())),
+            time_ago: author.map(|a| format_relative_time(a.time.seconds, a.time.offset)),
         }
     }
 
@@ -151,6 +208,7 @@ pub struct LineBlame {
     pub commit_date: Option<String>,
     pub commit_message: Option<String>,
     pub commit_body: Option<String>,
+    pub time_ago: Option<String>,
 }
 
 impl LineBlame {
@@ -160,13 +218,13 @@ impl LineBlame {
         let mut content_before_variable = String::new();
 
         let variables = hashmap! {
-            "commit" => &self.commit_hash,
-            "author" => &self.author_name,
-            "date" => &self.commit_date,
-            "message" => &self.commit_message,
-            "email" => &self.author_email,
-            "body" => &self.commit_body,
-        };
+        "commit" => &self.commit_hash,
+        "author" => &self.author_name,
+        "date" => &self.commit_date,
+        "message" => &self.commit_message,
+        "email" => &self.author_email,
+        "body" => &self.commit_body,
+        "time-ago" => &self.time_ago        };
 
         let mut chars = format.chars().peekable();
         // in all cases, when any of the variables is empty we exclude the content before the variable
@@ -554,15 +612,16 @@ mod test {
             commit_date: Some("2028-01-10".to_owned()),
             commit_message: Some("feat!: extend house".to_owned()),
             commit_body: Some("BREAKING CHANGE: Removed door".to_owned()),
+            time_ago: Some("BREAKING CHANGE: Removed door".to_owned()),
         }
     }
 
     #[test]
     pub fn inline_blame_format_parser() {
-        let default_values = "{author}, {date} • {message} • {commit}";
+        let format = "{author}, {date} • {message} • {commit}";
 
         assert_eq!(
-            bob().parse_format(default_values),
+            bob().parse_format(format),
             "Bob TheBuilder, 2028-01-10 • feat!: extend house • f14ab1cf".to_owned()
         );
         assert_eq!(
@@ -570,7 +629,7 @@ mod test {
                 author_name: None,
                 ..bob()
             }
-            .parse_format(default_values),
+            .parse_format(format),
             "2028-01-10 • feat!: extend house • f14ab1cf".to_owned()
         );
         assert_eq!(
@@ -578,7 +637,7 @@ mod test {
                 commit_date: None,
                 ..bob()
             }
-            .parse_format(default_values),
+            .parse_format(format),
             "Bob TheBuilder • feat!: extend house • f14ab1cf".to_owned()
         );
         assert_eq!(
@@ -587,7 +646,7 @@ mod test {
                 author_email: None,
                 ..bob()
             }
-            .parse_format(default_values),
+            .parse_format(format),
             "Bob TheBuilder, 2028-01-10 • f14ab1cf".to_owned()
         );
         assert_eq!(
@@ -595,7 +654,7 @@ mod test {
                 commit_hash: None,
                 ..bob()
             }
-            .parse_format(default_values),
+            .parse_format(format),
             "Bob TheBuilder, 2028-01-10 • feat!: extend house".to_owned()
         );
         assert_eq!(
@@ -604,7 +663,7 @@ mod test {
                 author_name: None,
                 ..bob()
             }
-            .parse_format(default_values),
+            .parse_format(format),
             "feat!: extend house • f14ab1cf".to_owned()
         );
         assert_eq!(
@@ -613,7 +672,7 @@ mod test {
                 commit_message: None,
                 ..bob()
             }
-            .parse_format(default_values),
+            .parse_format(format),
             "2028-01-10 • f14ab1cf".to_owned()
         );
     }

@@ -185,7 +185,7 @@ impl Default for InlineBlameConfig {
     fn default() -> Self {
         Self {
             enable: false,
-            format: "{author}, {date} • {message} • {commit}".to_owned(),
+            format: "{author}, {time-ago} • {message} • {commit}".to_owned(),
         }
     }
 }
