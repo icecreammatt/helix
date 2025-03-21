@@ -597,6 +597,7 @@ impl MappableCommand {
         extend_to_word, "Extend to a two-character label",
         goto_next_tabstop, "goto next snippet placeholder",
         goto_prev_tabstop, "goto next snippet placeholder",
+        inline_blame, "Show blame for the current line",
     );
 }
 
@@ -3469,6 +3470,26 @@ enum IndentFallbackPos {
 // If the line is empty, automatically indent.
 fn insert_at_line_start(cx: &mut Context) {
     insert_with_indent(cx, IndentFallbackPos::LineStart);
+}
+
+fn inline_blame(cx: &mut Context) {
+    let (view, doc) = current_ref!(cx.editor);
+    const BLAME_ERROR: &str = "No blame found for the current file";
+    let Some(blame) = &doc.file_blame else {
+        cx.editor.set_error(BLAME_ERROR);
+        return;
+    };
+    let cursor_line = doc.cursor_line(view.id);
+    let Some((inserted_lines, deleted_lines)) = doc
+        .diff_handle()
+        .map(|handle| handle.load().inserted_and_deleted_before_line(cursor_line))
+    else {
+        cx.editor.set_error(BLAME_ERROR);
+        return;
+    };
+    let blame = blame.blame_for_line(cursor_line as u32, inserted_lines, deleted_lines);
+    cx.editor
+        .set_status(blame.parse_format(&cx.editor.config().inline_blame.format));
 }
 
 // `A` inserts at the end of each line with a selection.

@@ -60,12 +60,6 @@ impl FileBlame {
         }
     }
 
-    /// Compute the blame for the file
-    ///
-    /// # Performance considerations
-    ///
-    /// This function is computationally expensive to perform and such should only be called
-    /// in a non-blocking environment
     pub fn try_new(file: PathBuf) -> Result<Self> {
         let thread_safe_repo =
             open_repo(get_repo_dir(&file)?).context("failed to open git repo")?;
