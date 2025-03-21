@@ -3475,7 +3475,8 @@ fn insert_at_line_start(cx: &mut Context) {
 fn inline_blame(cx: &mut Context) {
     let (view, doc) = current_ref!(cx.editor);
     let Some(blame) = &doc.file_blame else {
-        cx.editor.set_error("No blame found for the current file");
+        cx.editor
+            .set_status("The blame for this file is not ready yet. Try again in a few seconds");
         return;
     };
     let cursor_line = doc.cursor_line(view.id);
