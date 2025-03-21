@@ -1,32 +1,28 @@
-#![allow(dead_code, unused_variables, unused_mut)]
-
 use helix_core::Position;
 
 use helix_view::theme::Style;
-use helix_view::{Document, Theme};
+use helix_view::Theme;
 
 use crate::ui::document::{LinePos, TextRenderer};
 use crate::ui::text_decorations::Decoration;
 
-pub struct InlineBlame<'a> {
+pub struct InlineBlame {
     message: String,
-    doc: &'a Document,
     cursor: usize,
     style: Style,
 }
 
-impl<'a> InlineBlame<'a> {
-    pub fn new(doc: &'a Document, theme: &Theme, cursor: usize, message: String) -> Self {
+impl InlineBlame {
+    pub fn new(theme: &Theme, cursor: usize, message: String) -> Self {
         InlineBlame {
             style: theme.get("ui.virtual.inline-blame"),
             message,
-            doc,
             cursor,
         }
     }
 }
 
-impl Decoration for InlineBlame<'_> {
+impl Decoration for InlineBlame {
     fn render_virt_lines(
         &mut self,
         renderer: &mut TextRenderer,
@@ -38,7 +34,6 @@ impl Decoration for InlineBlame<'_> {
         }
         let row = pos.visual_line;
         let col = virt_off.col as u16;
-        let style = self.style;
         let width = renderer.viewport.width;
         let start_col = col - renderer.offset.col as u16;
         // start drawing the git blame 6 spaces after the end of the line

@@ -216,7 +216,7 @@ impl EditorView {
                     })
                 })
             {
-                decorations.add_decoration(InlineBlame::new(doc, theme, cursor_line, blame));
+                decorations.add_decoration(InlineBlame::new(theme, cursor_line, blame));
             }
         }
 
