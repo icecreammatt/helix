@@ -60,6 +60,7 @@ impl FileBlame {
         }
     }
 
+    /// Compute blame for this file
     pub fn try_new(file: PathBuf) -> Result<Self> {
         let thread_safe_repo =
             open_repo(get_repo_dir(&file)?).context("failed to open git repo")?;
