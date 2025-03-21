@@ -179,16 +179,16 @@ impl Diff<'_> {
 
     /// Get the amount of lines inserted and deleted before a given line
     pub fn inserted_and_deleted_before_line(&self, cursor_line: usize) -> (u32, u32) {
-        let mut inserted_lines_count: u32 = 0;
-        let mut deleted_lines_count: u32 = 0;
-        for hunk in self.hunks_intersecting_line_ranges(std::iter::once((0, cursor_line))) {
-            let lines_inserted = hunk.after.end - hunk.after.start;
-            let lines_removed = hunk.before.end - hunk.before.start;
-            inserted_lines_count += lines_inserted;
-            deleted_lines_count += lines_removed;
-        }
-
-        (inserted_lines_count, deleted_lines_count)
+        self.hunks_intersecting_line_ranges(std::iter::once((0, cursor_line)))
+            .fold(
+                (0, 0),
+                |(total_inserted_lines, total_deleted_lines), hunk| {
+                    (
+                        total_inserted_lines + (hunk.after.end - hunk.after.start),
+                        total_deleted_lines + (hunk.before.end - hunk.before.start),
+                    )
+                },
+            )
     }
 
     pub fn doc(&self) -> &Rope {
