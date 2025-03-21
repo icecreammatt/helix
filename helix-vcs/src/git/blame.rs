@@ -235,7 +235,7 @@ impl LineBlame {
 // For some reasons the CI is failing on windows with the message "Commits not found".
 // There is nothing windows-specific in this implementation
 // As long as these tests pass on other platforms, on Windows it should work too
-#[cfg(not(windows))]
+// #[cfg(not(windows))]
 #[cfg(test)]
 mod test {
     use super::*;
