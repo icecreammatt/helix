@@ -22,8 +22,7 @@ use crate::FileChange;
 #[cfg(test)]
 mod test;
 
-mod blame;
-pub use blame::*;
+pub mod blame;
 
 #[inline]
 fn get_repo_dir(file: &Path) -> Result<&Path> {

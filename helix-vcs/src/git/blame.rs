@@ -38,11 +38,11 @@ impl FileBlame {
         // we can show to the user nothing at all. This is detected in the editor
         let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count;
         let repo = self.repo.to_thread_local();
+
         let commit = self
             .blame
             .get(&blame_line)
             .and_then(|obj| repo.find_commit(*obj).ok());
-
         let message = commit.as_ref().and_then(|c| c.message().ok());
         let author = commit.as_ref().and_then(|c| c.author().ok());
 
@@ -64,9 +64,7 @@ impl FileBlame {
     pub fn try_new(file: PathBuf) -> Result<Self> {
         let thread_safe_repo =
             open_repo(get_repo_dir(&file)?).context("failed to open git repo")?;
-
         let repo = thread_safe_repo.to_thread_local();
-
         let head = repo.head()?.peel_to_commit_in_place()?.id;
 
         let traverse = gix::traverse::commit::topo::Builder::from_iters(
@@ -88,7 +86,6 @@ impl FileBlame {
             .context("Could not convert path to string")?;
 
         let mut resource_cache = repo.diff_resource_cache_for_tree_diff()?;
-
         let file_blame = gix::blame::file(
             &repo.objects,
             traverse.into_iter(),
@@ -142,12 +139,11 @@ impl LineBlame {
         let mut exclude_content_after_variable = false;
         while let Some(ch) = chars.next() {
             // "{{" => '{'
+            //
+            // We don't have to '}}' => '}' escape because none of
+            // the variables have a '}' in them
             if ch == '{' && chars.next_if_eq(&'{').is_some() {
                 content_before_variable.push('{');
-            }
-            // "}}" => '}'
-            else if ch == '}' && chars.next_if_eq(&'}').is_some() {
-                content_before_variable.push('}');
             } else if ch == '{' {
                 let mut variable = String::new();
                 // eat all characters until the end
@@ -291,7 +287,6 @@ mod test {
         };
     }
 
-    /// Attributes on expressions are experimental so we have to use a whole macro for this
     #[cfg(windows)]
     macro_rules! newline_literal {
         () => {
@@ -409,9 +404,10 @@ mod test {
 
     // For some reasons the CI is failing on windows with the message "Commits not found".
     // The created temporary repository has no commits... But this is not an issue on unix.
-    // There is nothing windows-specific in this implementation.
-    // It should be fine to disable this test in Windows.
-    // As long as these tests pass on other platforms, on Windows it should work too
+    // There is nothing platform-specific in this implementation. This is a problem only
+    // for tests on Windows.
+    // As such it should be fine to disable this test in Windows.
+    // As long as these tests pass on other platforms, on Windows it will work too.
     #[cfg(not(windows))]
     #[test]
     pub fn blamed_lines() {

@@ -175,7 +175,9 @@ impl Default for GutterLineNumbersConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct InlineBlameConfig {
+    /// Show inline blame for a line when cursor is on that line
     pub enable: bool,
+    /// How the inline blame should look like and the information it includes
     pub format: String,
 }
 
@@ -383,6 +385,7 @@ pub struct Config {
     pub end_of_line_diagnostics: DiagnosticFilter,
     // Set to override the default clipboard provider
     pub clipboard_provider: ClipboardProvider,
+    /// Inline blame allows showing the latest commit that affected the line the cursor is on as virtual text
     pub inline_blame: InlineBlameConfig,
 }
 
@@ -1130,7 +1133,6 @@ pub struct Editor {
 
     pub mouse_down_range: Option<Range>,
     pub cursor_cache: CursorCache,
-    pub blame_string: Option<String>,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1253,7 +1255,6 @@ impl Editor {
             handlers,
             mouse_down_range: None,
             cursor_cache: CursorCache::default(),
-            blame_string: None,
         }
     }
 
@@ -1909,7 +1910,6 @@ impl Editor {
 
         let path = path.map(|path| path.into());
         let doc = doc_mut!(self, &doc_id);
-
         let doc_save_future = doc.save(path, force)?;
 
         helix_event::dispatch(DidRequestFileBlameUpdate {

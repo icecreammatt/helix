@@ -7,7 +7,7 @@ use std::{
 
 #[cfg(feature = "git")]
 mod git;
-pub use git::FileBlame;
+pub use git::blame::FileBlame;
 
 mod diff;
 
