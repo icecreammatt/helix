@@ -365,17 +365,6 @@ impl Application {
             ConfigEvent::Update(editor_config) => {
                 let mut app_config = (*self.config.load().clone()).clone();
 
-                if !app_config.editor.inline_blame.enable && editor_config.inline_blame.enable {
-                    // turned inline-blame on. Update blame for all documents
-                    let doc_ids: Vec<_> = self.editor.documents().map(|doc| doc.id()).collect();
-                    for document_id in doc_ids {
-                        helix_event::dispatch(helix_view::events::DidRequestFileBlameUpdate {
-                            editor: &mut self.editor,
-                            doc: document_id,
-                        });
-                    }
-                }
-
                 app_config.editor = *editor_config;
                 if let Err(err) = self.terminal.reconfigure(app_config.editor.clone().into()) {
                     self.editor.set_error(err.to_string());
