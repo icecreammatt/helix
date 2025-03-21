@@ -53,15 +53,11 @@ impl helix_event::AsyncHook for BlameHandler {
                     return;
                 };
 
-                let Ok(file_blame) = result else {
-                    return;
-                };
-
                 job::dispatch(move |editor, _| {
                     let Some(doc) = editor.document_mut(doc_id) else {
                         return;
                     };
-                    doc.file_blame = Some(file_blame);
+                    doc.file_blame = Some(result);
                 })
                 .await;
             });

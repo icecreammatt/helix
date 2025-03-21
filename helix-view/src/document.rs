@@ -196,7 +196,9 @@ pub struct Document {
     diff_handle: Option<DiffHandle>,
     version_control_head: Option<Arc<ArcSwap<Box<str>>>>,
     /// Contains blame information for each line in the file
-    pub file_blame: Option<helix_vcs::FileBlame>,
+    /// We store the Result because when we access the blame directly we want to log the error
+    /// But if it is in the background we are just going to ignore the error
+    pub file_blame: Option<anyhow::Result<helix_vcs::FileBlame>>,
 
     // when document was used for most-recent-used buffer picker
     pub focused_at: std::time::Instant,

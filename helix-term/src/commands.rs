@@ -3474,20 +3474,25 @@ fn insert_at_line_start(cx: &mut Context) {
 
 fn inline_blame(cx: &mut Context) {
     let (view, doc) = current_ref!(cx.editor);
-    const BLAME_ERROR: &str = "No blame found for the current file";
     let Some(blame) = &doc.file_blame else {
-        cx.editor.set_error(BLAME_ERROR);
+        cx.editor.set_error("No blame found for the current file");
         return;
     };
     let cursor_line = doc.cursor_line(view.id);
-    let Some((inserted_lines, deleted_lines)) = doc
+    let (inserted_lines, deleted_lines) = doc
         .diff_handle()
         .map(|handle| handle.load().inserted_and_deleted_before_line(cursor_line))
-    else {
-        cx.editor.set_error(BLAME_ERROR);
-        return;
+        .unwrap_or_default();
+
+    let blame = match blame {
+        Ok(blame) => blame.blame_for_line(cursor_line as u32, inserted_lines, deleted_lines),
+        Err(err) => {
+            let err = format!("Unable to get blame for this line: {err}");
+            log::error!("{err}");
+            cx.editor.set_error(err);
+            return;
+        }
     };
-    let blame = blame.blame_for_line(cursor_line as u32, inserted_lines, deleted_lines);
     cx.editor
         .set_status(blame.parse_format(&cx.editor.config().inline_blame.format));
 }
