@@ -232,10 +232,6 @@ impl LineBlame {
     }
 }
 
-// For some reasons the CI is failing on windows with the message "Commits not found".
-// There is nothing windows-specific in this implementation
-// As long as these tests pass on other platforms, on Windows it should work too
-// #[cfg(not(windows))]
 #[cfg(test)]
 mod test {
     use super::*;
@@ -429,6 +425,12 @@ mod test {
         }};
     }
 
+    // For some reasons the CI is failing on windows with the message "Commits not found".
+    // The created temporary repository has no commits... But this is not an issue on unix.
+    // There is nothing windows-specific in this implementation.
+    // It should be fine to disable this test in Windows.
+    // As long as these tests pass on other platforms, on Windows it should work too
+    #[cfg(not(windows))]
     #[test]
     pub fn blamed_lines() {
         assert_line_blame_progress! {
