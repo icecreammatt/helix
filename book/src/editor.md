@@ -183,7 +183,7 @@ Any of the variables can potentially be empty.
 In this case, the content before the variable will not be included in the string.
 If the variable is at the beginning of the string, the content after the variable will not be included.
 
-Some examples, using the default value `inline-blame-format` value:
+Some examples, using the default value `format` value:
 
 - If `author` is empty: `"{date} • {message} • {commit}"`
 - If `date` is empty: `"{author} • {message} • {commit}"`
