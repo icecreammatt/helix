@@ -13,6 +13,7 @@ use helix_core::line_ending;
 use helix_stdx::path::home_dir;
 use helix_view::document::{read_to_string, DEFAULT_LANGUAGE_NAME};
 use helix_view::editor::{CloseError, ConfigEvent};
+use helix_view::events::DidRequestFileBlameUpdate;
 use helix_view::expansion;
 use serde_json::Value;
 use ui::completers::{self, Completer};
@@ -1330,12 +1331,17 @@ fn reload(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyh
     doc.reload(view, &cx.editor.diff_providers).map(|_| {
         view.ensure_cursor_in_view(doc, scrolloff);
     })?;
+    let doc_id = doc.id();
     if let Some(path) = doc.path() {
         cx.editor
             .language_servers
             .file_event_handler
             .file_changed(path.clone());
     }
+    helix_event::dispatch(DidRequestFileBlameUpdate {
+        editor: cx.editor,
+        doc: doc_id,
+    });
     Ok(())
 }
 
@@ -1389,6 +1395,11 @@ fn reload_all(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
                 view.ensure_cursor_in_view(doc, scrolloff);
             }
         }
+
+        helix_event::dispatch(DidRequestFileBlameUpdate {
+            editor: cx.editor,
+            doc: doc_id,
+        });
     }
 
     Ok(())

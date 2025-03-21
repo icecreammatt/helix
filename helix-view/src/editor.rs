@@ -1915,7 +1915,13 @@ impl Editor {
 
         let path = path.map(|path| path.into());
         let doc = doc_mut!(self, &doc_id);
+
         let doc_save_future = doc.save(path, force)?;
+
+        helix_event::dispatch(DidRequestFileBlameUpdate {
+            editor: self,
+            doc: doc_id,
+        });
 
         // When a file is written to, notify the file event handler.
         // Note: This can be removed once proper file watching is implemented.
