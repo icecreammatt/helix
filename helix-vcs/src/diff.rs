@@ -177,30 +177,6 @@ impl Diff<'_> {
         }
     }
 
-    /// Get the amount of lines inserted and deleted before a line that already existed
-    /// before the blame
-    ///
-    /// Returns None if the line is itself part of an insertion
-    pub fn inserted_and_deleted_before_line(&self, cursor_line: usize) -> Option<(u32, u32)> {
-        self.hunks_intersecting_line_ranges(std::iter::once((0, cursor_line)))
-            .try_fold(
-                (0, 0),
-                |(total_inserted_lines, total_deleted_lines), hunk| {
-                    if hunk.after.start <= cursor_line as u32
-                        && hunk.after.end >= cursor_line as u32
-                    {
-                        Err(())
-                    } else {
-                        Ok((
-                            total_inserted_lines + (hunk.after.end - hunk.after.start),
-                            total_deleted_lines + (hunk.before.end - hunk.before.start),
-                        ))
-                    }
-                },
-            )
-            .ok()
-    }
-
     pub fn doc(&self) -> &Rope {
         if self.inverted {
             &self.diff.diff_base

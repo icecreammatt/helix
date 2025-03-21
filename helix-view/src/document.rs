@@ -273,6 +273,16 @@ pub struct DocumentInlayHintsId {
     pub last_line: usize,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum LineBlameError<'a> {
+    #[error("Not committed yet")]
+    NotCommittedYet,
+    #[error("Unable to get blame for this line: {0}")]
+    NoFileBlame(&'a anyhow::Error),
+    #[error("The blame for this file is not ready yet. Try again in a few seconds")]
+    NotReadyYet,
+}
+
 use std::{fmt, mem};
 impl fmt::Debug for Document {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1532,6 +1542,19 @@ impl Document {
     /// Apply a [`Transaction`] to the [`Document`] to change its text.
     pub fn apply(&mut self, transaction: &Transaction, view_id: ViewId) -> bool {
         self.apply_inner(transaction, view_id, true)
+    }
+
+    /// Get the line blame for this view
+    pub fn line_blame(&self, cursor_line: u32, format: &str) -> Result<String, LineBlameError> {
+        Ok(self
+            .file_blame
+            .as_ref()
+            .ok_or(LineBlameError::NotReadyYet)?
+            .as_ref()
+            .map_err(LineBlameError::NoFileBlame)?
+            .blame_for_line(cursor_line, self.diff_handle())
+            .ok_or(LineBlameError::NotCommittedYet)?
+            .parse_format(format))
     }
 
     /// Apply a [`Transaction`] to the [`Document`] to change its text

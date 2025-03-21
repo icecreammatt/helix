@@ -3473,34 +3473,25 @@ fn insert_at_line_start(cx: &mut Context) {
 }
 
 fn inline_blame(cx: &mut Context) {
-    let (view, doc) = current_ref!(cx.editor);
-    let Some(blame) = &doc.file_blame else {
-        cx.editor
-            .set_status("The blame for this file is not ready yet. Try again in a few seconds");
-        return;
-    };
-    let cursor_line = doc.cursor_line(view.id);
-    let (inserted_lines, deleted_lines) = match doc.diff_handle().map_or(Some((0, 0)), |handle| {
-        handle.load().inserted_and_deleted_before_line(cursor_line)
-    }) {
-        Some(diff) => diff,
-        None => {
-            cx.editor.set_status("Not committed yet");
-            return;
-        }
-    };
+    use helix_view::document::LineBlameError;
 
-    let blame = match blame {
-        Ok(blame) => blame.blame_for_line(cursor_line as u32, inserted_lines, deleted_lines),
-        Err(err) => {
-            let err = format!("Unable to get blame for this line: {err}");
-            log::error!("{err}");
-            cx.editor.set_error(err);
-            return;
-        }
-    };
-    cx.editor
-        .set_status(blame.parse_format(&cx.editor.config().inline_blame.format));
+    let (view, doc) = current_ref!(cx.editor);
+    let cursor_line = doc.cursor_line(view.id);
+
+    let line_blame =
+        match doc.line_blame(cursor_line as u32, &cx.editor.config().inline_blame.format) {
+            Ok(line_blame) => line_blame,
+            Err(err @ (LineBlameError::NotCommittedYet | LineBlameError::NotReadyYet)) => {
+                cx.editor.set_status(err.to_string());
+                return;
+            }
+            Err(LineBlameError::NoFileBlame(err)) => {
+                cx.editor.set_error(err.to_string());
+                return;
+            }
+        };
+
+    cx.editor.set_status(line_blame);
 }
 
 // `A` inserts at the end of each line with a selection.

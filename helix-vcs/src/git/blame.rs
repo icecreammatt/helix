@@ -5,6 +5,8 @@ use helix_core::hashmap;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::DiffHandle;
+
 use super::{get_repo_dir, open_repo};
 
 /// Stores information about the blame for a file
@@ -17,13 +19,46 @@ pub struct FileBlame {
 }
 
 impl FileBlame {
-    /// Get the blame information corresponing to a line in file
-    #[must_use]
-    pub fn blame_for_line(
+    /// Get the blame information corresponing to a line in file and diff for that line
+    ///
+    /// returns `None` if the line is part of an insertion, as the blame for that line would not
+    /// be meaningful
+    pub fn blame_for_line(&self, line: u32, diff_handle: Option<&DiffHandle>) -> Option<LineBlame> {
+        let (inserted_lines, removed_lines) = diff_handle.map_or(
+            // in theory there can be situations where we don't have the diff for a file
+            // but we have the blame. In this case, we can just act like there is no diff
+            Some((0, 0)),
+            |diff_handle| {
+                // Compute the amount of lines inserted and deleted before the `line`
+                // This information is needed to accurately transform the state of the
+                // file in the file system into what gix::blame knows about (gix::blame only
+                // knows about commit history, it does not know about uncommitted changes)
+                diff_handle
+                    .load()
+                    .hunks_intersecting_line_ranges(std::iter::once((0, line as usize)))
+                    .try_fold(
+                        (0, 0),
+                        |(total_inserted_lines, total_deleted_lines), hunk| {
+                            // check if the line intersects the hunk's `after` (which represents
+                            // inserted lines)
+                            (hunk.after.start > line || hunk.after.end <= line).then_some((
+                                total_inserted_lines + (hunk.after.end - hunk.after.start),
+                                total_deleted_lines + (hunk.before.end - hunk.before.start),
+                            ))
+                        },
+                    )
+            },
+        )?;
+
+        Some(self.blame_for_line_inserted_removed(line, inserted_lines, removed_lines))
+    }
+
+    // this is a separate function for use in Tests
+    fn blame_for_line_inserted_removed(
         &self,
         line: u32,
-        added_lines_count: u32,
-        removed_lines_count: u32,
+        inserted_lines: u32,
+        removed_lines: u32,
     ) -> LineBlame {
         // Because gix_blame doesn't care about stuff that is not commited, we have to "normalize" the
         // line number to account for uncommited code.
@@ -36,7 +71,7 @@ impl FileBlame {
         // So when our cursor is on the 10th added line or earlier, blame_line will be 0. This means
         // the blame will be incorrect. But that's fine, because when the cursor_line is on some hunk,
         // we can show to the user nothing at all. This is detected in the editor
-        let blame_line = line.saturating_sub(added_lines_count) + removed_lines_count;
+        let blame_line = line.saturating_sub(inserted_lines) + removed_lines;
         let repo = self.repo.to_thread_local();
 
         let commit = self
@@ -372,7 +407,7 @@ mod test {
                             let blame_result =
                                 FileBlame::try_new(file.clone())
                                     .unwrap()
-                                    .blame_for_line(line_number, added_lines, removed_lines)
+                                    .blame_for_line_inserted_removed(line_number, added_lines, removed_lines)
                                     .commit_message;
 
                             assert_eq!(
