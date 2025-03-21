@@ -36,6 +36,7 @@ For inspiration, you can find the default `theme.toml`
 user-submitted themes
 [here](https://github.com/helix-editor/helix/blob/master/runtime/themes).
 
+
 ## The details of theme creation
 
 ### Color palettes
@@ -61,7 +62,7 @@ are listed below. The `[palette]` section in the config file takes precedence
 over it and is merged into the default palette.
 
 | Color Name      |
-| --------------- |
+| ---             |
 | `default`       |
 | `black`         |
 | `red`           |
@@ -85,17 +86,17 @@ over it and is merged into the default palette.
 The following values may be used as modifier, provided they are supported by
 your terminal emulator.
 
-| Modifier      |
-| ------------- |
-| `bold`        |
-| `dim`         |
-| `italic`      |
-| `underlined`  |
-| `slow_blink`  |
-| `rapid_blink` |
-| `reversed`    |
-| `hidden`      |
-| `crossed_out` |
+| Modifier             |
+| ---                  |
+| `bold`               |
+| `dim`                |
+| `italic`             |
+| `underlined`         |
+| `slow_blink`         |
+| `rapid_blink`        |
+| `reversed`           |
+| `hidden`             |
+| `crossed_out`        |
 
 > 💡 The `underlined` modifier is deprecated and only available for backwards compatibility.
 > Its behavior is equivalent to setting `underline.style="line"`.
@@ -105,13 +106,14 @@ your terminal emulator.
 One of the following values may be used as a value for `underline.style`, providing it is
 supported by your terminal emulator.
 
-| Modifier      |
-| ------------- |
-| `line`        |
-| `curl`        |
-| `dashed`      |
-| `dotted`      |
-| `double_line` |
+| Modifier       |
+| ---            |
+| `line`         |
+| `curl`         |
+| `dashed`       |
+| `dotted`       |
+| `double_line`  |
+
 
 ### Inheritance
 
@@ -152,7 +154,6 @@ We use a similar set of scopes as
 - `constructor`
 
 - `constant` (TODO: constant.other.placeholder for `%v`)
-
   - `builtin` Special constants provided by the language (`true`, `false`, `nil` etc)
     - `boolean`
   - `character`
@@ -162,7 +163,6 @@ We use a similar set of scopes as
     - `float`
 
 - `string` (TODO: string.quoted.{single, double}, string.raw/.unquoted)?
-
   - `regexp` - Regular expressions
   - `special`
     - `path`
@@ -170,13 +170,11 @@ We use a similar set of scopes as
     - `symbol` - Erlang/Elixir atoms, Ruby symbols, Clojure keywords
 
 - `comment` - Code comments
-
   - `line` - Single line comments (`//`)
   - `block` - Block comments (e.g. (`/* */`)
     - `documentation` - Documentation comments (e.g. `///` in Rust)
 
 - `variable` - Variables
-
   - `builtin` - Reserved language variables (`self`, `this`, `super`, etc.)
   - `parameter` - Function parameters
   - `other`
@@ -186,13 +184,11 @@ We use a similar set of scopes as
 - `label`
 
 - `punctuation`
-
   - `delimiter` - Commas, colons
   - `bracket` - Parentheses, angle brackets, etc.
   - `special` - String interpolation brackets.
 
 - `keyword`
-
   - `control`
     - `conditional` - `if`, `else`
     - `repeat` - `for`, `while`, `loop`
@@ -209,7 +205,6 @@ We use a similar set of scopes as
 - `operator` - `||`, `+=`, `>`
 
 - `function`
-
   - `builtin`
   - `method`
     - `private` - Private methods that use a unique syntax (currently just ECMAScript-based languages)
@@ -217,7 +212,6 @@ We use a similar set of scopes as
   - `special` (preprocessor in C)
 
 - `tag` - Tags (e.g. `<body>` in HTML)
-
   - `builtin`
 
 - `namespace`
@@ -225,7 +219,6 @@ We use a similar set of scopes as
 - `special`
 
 - `markup`
-
   - `heading`
     - `marker`
     - `1`, `2`, `3`, `4`, `5`, `6` - heading text for h1 through h6
@@ -272,8 +265,9 @@ These scopes are used for theming the editor interface:
       - `completion` - for completion doc popup UI
       - `hover` - for hover popup UI
 
+
 | Key                               | Notes                                                                                          |
-| --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| ---                               | ---                                                                                            |
 | `ui.background`                   |                                                                                                |
 | `ui.background.separator`         | Picker separator below input line                                                              |
 | `ui.cursor`                       |                                                                                                |
@@ -319,8 +313,8 @@ These scopes are used for theming the editor interface:
 | `ui.virtual.inlay-hint.parameter` | Style for inlay hints of kind `parameter` (language servers are not required to set a kind)    |
 | `ui.virtual.inlay-hint.type`      | Style for inlay hints of kind `type` (language servers are not required to set a kind)         |
 | `ui.virtual.wrap`                 | Soft-wrap indicator (see the [`editor.soft-wrap` config][editor-section])                      |
-| `ui.virtual.inline-blame`         | Inline blame indicator (see the [`editor.inline-blame` config][editor-section])                |
 | `ui.virtual.jump-label`           | Style for virtual jump labels                                                                  |
+| `ui.virtual.inline-blame`         | Inline blame indicator (see the [`editor.inline-blame` config][editor-section])                |
 | `ui.menu`                         | Code and command completion menus                                                              |
 | `ui.menu.selected`                | Selected autocomplete item                                                                     |
 | `ui.menu.scroll`                  | `fg` sets thumb color, `bg` sets track color of scrollbar                                      |
