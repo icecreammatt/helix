@@ -18,7 +18,7 @@ pub struct InlineBlame<'a> {
 impl<'a> InlineBlame<'a> {
     pub fn new(doc: &'a Document, theme: &Theme, cursor: usize, message: String) -> Self {
         InlineBlame {
-            style: theme.get("ui.virtual.blame"),
+            style: theme.get("ui.virtual.inline-blame"),
             message,
             doc,
             cursor,
