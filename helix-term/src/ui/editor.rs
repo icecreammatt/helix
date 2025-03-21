@@ -205,18 +205,26 @@ impl EditorView {
         ));
 
         if config.inline_blame.enable {
-            let cursor_line = doc.cursor_line(view.id);
-            let (ins, del) = doc
-                .diff_handle()
-                .map(|handle| handle.load().inserted_and_deleted_before_line(cursor_line))
-                .unwrap_or_default();
-            if let Some(Ok(blame)) = doc.file_blame.as_ref().map(|fb_result| {
-                fb_result.as_ref().map(|fb| {
-                    fb.blame_for_line(cursor_line as u32, ins, del)
-                        .parse_format(&config.inline_blame.format)
-                })
-            }) {
-                decorations.add_decoration(InlineBlame::new(theme, cursor_line, blame));
+            let cursor_line_idx = doc.cursor_line(view.id);
+
+            // do not render inline blame for empty lines to reduce visual noise
+            if doc.text().line(cursor_line_idx) != doc.line_ending.as_str() {
+                let (ins, del) = doc
+                    .diff_handle()
+                    .map(|handle| {
+                        handle
+                            .load()
+                            .inserted_and_deleted_before_line(cursor_line_idx)
+                    })
+                    .unwrap_or_default();
+                if let Some(Ok(blame)) = doc.file_blame.as_ref().map(|fb_result| {
+                    fb_result.as_ref().map(|fb| {
+                        fb.blame_for_line(cursor_line_idx as u32, ins, del)
+                            .parse_format(&config.inline_blame.format)
+                    })
+                }) {
+                    decorations.add_decoration(InlineBlame::new(theme, cursor_line_idx, blame));
+                }
             }
         }
 
