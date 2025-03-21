@@ -509,6 +509,25 @@ mod test {
                 "}" 1,
                 "  five" 5,
                 "  four" 5;
+            // mixing inserts with deletes
+            6 no_commit =>
+                "  six" delete,
+                "  2" insert,
+                "  three" delete,
+                "  four" 5,
+                "  1" insert,
+                "}" 1,
+                "]" insert,
+                "  five" delete,
+                "  four" 5;
+            // committing inserts and deletes
+            6 =>
+                "  2" 6,
+                "  four" 5,
+                "  1" 6,
+                "}" 1,
+                "]" 6,
+                "  four" 5;
         };
     }
 
