@@ -71,11 +71,6 @@ impl helix_event::AsyncHook for BlameHandler {
 pub(super) fn register_hooks(handlers: &Handlers) {
     let tx = handlers.blame.clone();
     register_hook!(move |event: &mut DidRequestFileBlameUpdate<'_>| {
-        let version_control_config = &event.editor.config().version_control;
-        if !version_control_config.inline_blame {
-            return Ok(());
-        }
-
         let Some(doc) = event.editor.document(event.doc) else {
             return Ok(());
         };

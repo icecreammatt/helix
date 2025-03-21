@@ -174,17 +174,16 @@ impl Default for GutterLineNumbersConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
-pub struct VersionControlConfig {
-    /// Whether to enable git blame
-    pub inline_blame: bool,
-    pub inline_blame_format: String,
+pub struct InlineBlameConfig {
+    pub enable: bool,
+    pub format: String,
 }
 
-impl Default for VersionControlConfig {
+impl Default for InlineBlameConfig {
     fn default() -> Self {
         Self {
-            inline_blame: false,
-            inline_blame_format: "{author}, {date} • {message} • {commit}".to_owned(),
+            enable: false,
+            format: "{author}, {date} • {message} • {commit}".to_owned(),
         }
     }
 }
@@ -384,11 +383,7 @@ pub struct Config {
     pub end_of_line_diagnostics: DiagnosticFilter,
     // Set to override the default clipboard provider
     pub clipboard_provider: ClipboardProvider,
-    /// Whether to read settings from [EditorConfig](https://editorconfig.org) files. Defaults to
-    /// `true`.
-    pub editor_config: bool,
-    /// Version control
-    pub version_control: VersionControlConfig,
+    pub inline_blame: InlineBlameConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
@@ -1032,8 +1027,7 @@ impl Default for Config {
             inline_diagnostics: InlineDiagnosticsConfig::default(),
             end_of_line_diagnostics: DiagnosticFilter::Disable,
             clipboard_provider: ClipboardProvider::default(),
-            editor_config: true,
-            version_control: VersionControlConfig::default(),
+            inline_blame: InlineBlameConfig::default(),
         }
     }
 }

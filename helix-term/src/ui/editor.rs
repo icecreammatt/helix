@@ -204,7 +204,7 @@ impl EditorView {
             config.end_of_line_diagnostics,
         ));
 
-        if config.version_control.inline_blame {
+        if config.inline_blame.enable {
             let cursor_line = doc.cursor_line(view.id);
             if let Some(blame) = doc
                 .diff_handle()
@@ -212,7 +212,7 @@ impl EditorView {
                 .and_then(|(ins, del)| {
                     doc.file_blame.as_ref().map(|fb| {
                         fb.blame_for_line(cursor_line as u32, ins, del)
-                            .parse_format(&config.version_control.inline_blame_format)
+                            .parse_format(&config.inline_blame.format)
                     })
                 })
             {

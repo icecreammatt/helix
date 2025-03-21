@@ -365,9 +365,7 @@ impl Application {
             ConfigEvent::Update(editor_config) => {
                 let mut app_config = (*self.config.load().clone()).clone();
 
-                if !app_config.editor.version_control.inline_blame
-                    && editor_config.version_control.inline_blame
-                {
+                if !app_config.editor.inline_blame.enable && editor_config.inline_blame.enable {
                     // turned inline-blame on. Update blame for all documents
                     let doc_ids: Vec<_> = self.editor.documents().map(|doc| doc.id()).collect();
                     for document_id in doc_ids {
