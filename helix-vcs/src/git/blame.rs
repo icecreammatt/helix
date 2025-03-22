@@ -182,7 +182,11 @@ impl FileBlame {
             &repo.objects,
             traverse.into_iter(),
             &mut resource_cache,
-            BStr::new(relative_path),
+            // FIXME: gix v0.70 does not account for backslashes in Windows and hard-codes
+            // the `/` as the path separator.
+            // There is a PR to fix that (https://github.com/GitoxideLabs/gitoxide/pull/1905#issue-2939833001)
+            // so we should remove this conversion once we update to a newer Gix version
+            BStr::new(&relative_path.replace('\\', "/")),
             None,
         )?
         .entries;
@@ -501,7 +505,7 @@ mod test {
     // for tests on Windows.
     // As such it should be fine to disable this test in Windows.
     // As long as these tests pass on other platforms, on Windows it will work too.
-    #[cfg(not(windows))]
+    // #[cfg(not(windows))]
     #[test]
     pub fn blamed_lines() {
         assert_line_blame_progress! {
