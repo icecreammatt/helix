@@ -166,7 +166,7 @@ The following statusline elements can be configured:
 | Key     | Description                                | Default |
 | ------- | ------------------------------------------ | ------- |
 | `enable` | Enable inline blame | `false` |
-| `format` | The format in which to show the inline blame | `"{author}, {time_ago} • {message} • {commit}"` |
+| `format` | The format in which to show the inline blame | `"{author}, {time-ago} • {message} • {commit}"` |
 
 For `inline-blame-format`, you can use specific variables like so: `{variable}`.
 
@@ -186,12 +186,12 @@ If the variable is at the beginning of the string, the content after the variabl
 
 Some examples, using the default value `format` value:
 
-- If `author` is empty: `"{date} • {message} • {commit}"`
-- If `date` is empty: `"{author} • {message} • {commit}"`
-- If `message` is empty: `"{author}, {date} • {commit}"`
-- If `commit` is empty: `"{author}, {date} • {message}"`
-- If `date` and `message` is empty: `"{author} • {commit}"`
-- If `author` and `message` is empty: `"{date} • {commit}"`
+- If `author` is empty: `"{time-ago} • {message} • {commit}"`
+- If `time-ago` is empty: `"{author} • {message} • {commit}"`
+- If `message` is empty: `"{author}, {time-ago} • {commit}"`
+- If `commit` is empty: `"{author}, {time-ago} • {message}"`
+- If `time-ago` and `message` is empty: `"{author} • {commit}"`
+- If `author` and `message` is empty: `"{time-ago} • {commit}"`
 
 ### `[editor.cursor-shape]` Section
 
