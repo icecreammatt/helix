@@ -24,47 +24,48 @@ fn now() -> SystemTime {
 ///
 /// # Arguments
 ///
-/// * `seconds` - Seconds since UNIX epoch (UTC)
+/// * `timestamp` - A point in history. Seconds since UNIX epoch (UTC)
 /// * `timezone_offset` - Timezone offset in seconds
 ///
 /// # Returns
 ///
-/// A String representing the relative time (e.g., "4 years ago")
-pub fn format_relative_time(seconds: i64, timezone_offset: i32) -> String {
+/// A String representing the relative time (e.g., "4 years ago", "11 months from now")
+pub fn format_relative_time(timestamp: i64, timezone_offset: i32) -> String {
+    let timestamp = timestamp + timezone_offset as i64;
     let now = now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
+        .as_secs() as i64
+        + timezone_offset as i64;
 
-    let local_seconds = seconds + timezone_offset as i64;
-    let local_now = now as i64 + timezone_offset as i64;
+    let time_passed = now - timestamp;
 
-    let diff = local_now - local_seconds;
+    let time_difference = time_passed.abs();
 
-    let label = if diff.is_positive() {
+    let (value, unit) = if time_difference >= YEAR {
+        let years = time_difference / YEAR;
+        (years, if years == 1 { "year" } else { "years" })
+    } else if time_difference >= MONTH {
+        let months = time_difference / MONTH;
+        (months, if months == 1 { "month" } else { "months" })
+    } else if time_difference >= DAY {
+        let days = time_difference / DAY;
+        (days, if days == 1 { "day" } else { "days" })
+    } else if time_difference >= HOUR {
+        let hours = time_difference / HOUR;
+        (hours, if hours == 1 { "hour" } else { "hours" })
+    } else if time_difference >= MINUTE {
+        let minutes = time_difference / MINUTE;
+        (minutes, if minutes == 1 { "minute" } else { "minutes" })
+    } else {
+        let seconds = time_difference / SECOND;
+        (seconds, if seconds == 1 { "second" } else { "seconds" })
+    };
+
+    let label = if time_passed.is_positive() {
         "ago"
     } else {
         "from now"
-    };
-
-    let (value, unit) = if diff >= YEAR {
-        let years = diff / YEAR;
-        (years, if years == 1 { "year" } else { "years" })
-    } else if diff >= MONTH {
-        let months = diff / MONTH;
-        (months, if months == 1 { "month" } else { "months" })
-    } else if diff >= DAY {
-        let days = diff / DAY;
-        (days, if days == 1 { "day" } else { "days" })
-    } else if diff >= HOUR {
-        let hours = diff / HOUR;
-        (hours, if hours == 1 { "hour" } else { "hours" })
-    } else if diff >= MINUTE {
-        let minutes = diff / MINUTE;
-        (minutes, if minutes == 1 { "minute" } else { "minutes" })
-    } else {
-        let seconds = diff / SECOND;
-        (seconds, if seconds == 1 { "second" } else { "seconds" })
     };
 
     format!("{value} {unit} {label}")
