@@ -29,35 +29,39 @@ impl Decoration for InlineBlame {
         pos: LinePos,
         virt_off: Position,
     ) -> Position {
+        // do not draw inline blame for lines other than the cursor line
         if self.cursor != pos.doc_line {
             return Position::new(0, 0);
         }
-        let row = pos.visual_line;
-        let col = virt_off.col as u16;
-        let width = renderer.viewport.width;
-        let start_col = col - renderer.offset.col as u16;
-        // start drawing the git blame 6 spaces after the end of the line
-        let draw_col = col + 6;
 
-        let end_col = renderer
-            .column_in_bounds(draw_col as usize, 1)
+        // where the line in the document ends
+        let end_of_line = virt_off.col as u16;
+        // length of line in the document
+        // draw the git blame 6 spaces after the end of the line
+        let start_drawing_at = end_of_line + 6;
+
+        let amount_of_characters_drawn = renderer
+            .column_in_bounds(start_drawing_at as usize, 1)
             .then(|| {
-                renderer
+                // the column where we stop drawing the blame
+                let stopped_drawing_at = renderer
                     .set_string_truncated(
-                        renderer.viewport.x + draw_col,
-                        row,
+                        renderer.viewport.x + start_drawing_at,
+                        pos.visual_line,
                         &self.message,
-                        width.saturating_sub(draw_col) as usize,
+                        renderer.viewport.width.saturating_sub(start_drawing_at) as usize,
                         |_| self.style,
                         true,
                         false,
                     )
-                    .0
+                    .0;
+
+                let line_length = end_of_line - renderer.offset.col as u16;
+
+                stopped_drawing_at - line_length
             })
-            .unwrap_or(start_col);
+            .unwrap_or_default();
 
-        let col_off = end_col - start_col;
-
-        Position::new(0, col_off as usize)
+        Position::new(0, amount_of_characters_drawn as usize)
     }
 }

@@ -25,20 +25,19 @@ fn now() -> SystemTime {
 /// # Arguments
 ///
 /// * `seconds` - Seconds since UNIX epoch (UTC)
-/// * `offset` - Timezone offset in seconds
+/// * `timezone_offset` - Timezone offset in seconds
 ///
 /// # Returns
 ///
 /// A String representing the relative time (e.g., "4 years ago")
-pub fn format_relative_time(seconds: i64, offset: i32) -> String {
-    let utc_now = now()
+pub fn format_relative_time(seconds: i64, timezone_offset: i32) -> String {
+    let now = now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
 
-    // adjust them to account for the timezone offset
-    let local_seconds = seconds + offset as i64;
-    let local_now = utc_now as i64 + offset as i64;
+    let local_seconds = seconds + timezone_offset as i64;
+    let local_now = now as i64 + timezone_offset as i64;
 
     let diff = local_now - local_seconds;
 
