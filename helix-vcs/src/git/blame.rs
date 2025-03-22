@@ -111,6 +111,12 @@ impl FileBlame {
         let repo = thread_safe_repo.to_thread_local();
         let head = repo.head()?.peel_to_commit_in_place()?.id;
 
+        // TODO: this iterator has a performane issue for large repos
+        // It was replaced in a new (yet unreleased) version of `gix`.
+        //
+        // Update to the new version once it releases.
+        //
+        // More info: https://github.com/helix-editor/helix/pull/13133#discussion_r2008611830
         let traverse = gix::traverse::commit::topo::Builder::from_iters(
             &repo.objects,
             [head],
