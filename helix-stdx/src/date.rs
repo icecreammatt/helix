@@ -8,8 +8,8 @@
 /// # Returns
 ///
 /// A String representing the relative time (e.g., "4 years ago")
-pub fn format_relative_time(seconds: i64, offset: i32) -> String {
-    let now = std::time::SystemTime::now()
+pub fn format_relative_time(seconds: i64, offset: i32, now: std::time::SystemTime) -> String {
+    let now = now
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);

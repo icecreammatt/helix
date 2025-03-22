@@ -33,6 +33,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::Arc,
+    time::SystemTime,
 };
 
 use tokio::{
@@ -1062,6 +1063,10 @@ use futures_util::stream::{Flatten, Once};
 type Diagnostics = BTreeMap<Uri, Vec<(lsp::Diagnostic, DiagnosticProvider)>>;
 
 pub struct Editor {
+    /// When the editor was started (Instant)
+    pub start_instant: Instant,
+    /// When the editor was started (System Time)
+    pub start_system_time: SystemTime,
     /// Current editing mode.
     pub mode: Mode,
     pub tree: Tree,
@@ -1214,6 +1219,8 @@ impl Editor {
         area.height -= 1;
 
         Self {
+            start_instant: Instant::now(),
+            start_system_time: SystemTime::now(),
             mode: Mode::Normal,
             tree: Tree::new(area),
             next_document_id: DocumentId::default(),
@@ -1256,6 +1263,16 @@ impl Editor {
             mouse_down_range: None,
             cursor_cache: CursorCache::default(),
         }
+    }
+
+    /// Getting the System Time via `SystemTime::now()` is a syscall, as such it is done just once when
+    /// the editor is created.
+    ///
+    /// The current time is then calculated by using `Instant::now()`,
+    /// which is much faster as it reads from a monotonic clock and does not
+    /// require any syscalls.
+    pub fn now(&self) -> SystemTime {
+        self.start_system_time + self.start_instant.elapsed()
     }
 
     pub fn popup_border(&self) -> bool {

@@ -23,7 +23,12 @@ impl FileBlame {
     ///
     /// returns `None` if the line is part of an insertion, as the blame for that line would not
     /// be meaningful
-    pub fn blame_for_line(&self, line: u32, diff_handle: Option<&DiffHandle>) -> Option<LineBlame> {
+    pub fn blame_for_line(
+        &self,
+        line: u32,
+        diff_handle: Option<&DiffHandle>,
+        now: std::time::SystemTime,
+    ) -> Option<LineBlame> {
         let (inserted_lines, removed_lines) = diff_handle.map_or(
             // in theory there can be situations where we don't have the diff for a file
             // but we have the blame. In this case, we can just act like there is no diff
@@ -50,7 +55,7 @@ impl FileBlame {
             },
         )?;
 
-        Some(self.blame_for_line_inserted_removed(line, inserted_lines, removed_lines))
+        Some(self.blame_for_line_inserted_removed(line, inserted_lines, removed_lines, now))
     }
 
     // this is a separate function for use in Tests
@@ -59,6 +64,7 @@ impl FileBlame {
         line: u32,
         inserted_lines: u32,
         removed_lines: u32,
+        now: std::time::SystemTime,
     ) -> LineBlame {
         // Because gix_blame doesn't care about stuff that is not commited, we have to "normalize" the
         // line number to account for uncommited code.
@@ -92,8 +98,9 @@ impl FileBlame {
             commit_body: message
                 .as_ref()
                 .and_then(|msg| msg.body.map(|body| body.to_string())),
-            time_ago: author
-                .map(|a| helix_stdx::date::format_relative_time(a.time.seconds, a.time.offset)),
+            time_ago: author.map(|a| {
+                helix_stdx::date::format_relative_time(a.time.seconds, a.time.offset, now)
+            }),
         }
     }
 
@@ -414,7 +421,7 @@ mod test {
                             let blame_result =
                                 FileBlame::try_new(file.clone())
                                     .unwrap()
-                                    .blame_for_line_inserted_removed(line_number, added_lines, removed_lines)
+                                    .blame_for_line_inserted_removed(line_number, added_lines, removed_lines, std::time::SystemTime::now())
                                     .commit_message;
 
                             assert_eq!(
