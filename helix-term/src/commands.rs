@@ -597,7 +597,7 @@ impl MappableCommand {
         extend_to_word, "Extend to a two-character label",
         goto_next_tabstop, "goto next snippet placeholder",
         goto_prev_tabstop, "goto next snippet placeholder",
-        inline_blame, "Show blame for the current line",
+        blame_line, "Show blame for the current line",
     );
 }
 
@@ -3472,7 +3472,7 @@ fn insert_at_line_start(cx: &mut Context) {
     insert_with_indent(cx, IndentFallbackPos::LineStart);
 }
 
-fn inline_blame(cx: &mut Context) {
+fn blame_line(cx: &mut Context) {
     use helix_view::document::LineBlameError;
 
     let (view, doc) = current_ref!(cx.editor);
@@ -3485,7 +3485,7 @@ fn inline_blame(cx: &mut Context) {
                 cx.editor.set_status(err.to_string());
                 return;
             }
-            Err(LineBlameError::NoFileBlame(err)) => {
+            Err(err @ LineBlameError::NoFileBlame(_, _)) => {
                 cx.editor.set_error(err.to_string());
                 return;
             }

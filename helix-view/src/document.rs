@@ -277,8 +277,8 @@ pub struct DocumentInlayHintsId {
 pub enum LineBlameError<'a> {
     #[error("Not committed yet")]
     NotCommittedYet,
-    #[error("Unable to get blame for this line: {0}")]
-    NoFileBlame(&'a anyhow::Error),
+    #[error("Unable to get blame for line {0}: {1}")]
+    NoFileBlame(u32, &'a anyhow::Error),
     #[error("The blame for this file is not ready yet. Try again in a few seconds")]
     NotReadyYet,
 }
@@ -1551,7 +1551,7 @@ impl Document {
             .as_ref()
             .ok_or(LineBlameError::NotReadyYet)?
             .as_ref()
-            .map_err(LineBlameError::NoFileBlame)?
+            .map_err(|err| LineBlameError::NoFileBlame(cursor_line.saturating_add(1), err))?
             .blame_for_line(cursor_line, self.diff_handle())
             .ok_or(LineBlameError::NotCommittedYet)?
             .parse_format(format))
