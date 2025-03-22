@@ -3478,21 +3478,18 @@ fn blame_line(cx: &mut Context) {
     let (view, doc) = current_ref!(cx.editor);
     let cursor_line = doc.cursor_line(view.id);
 
-    let line_blame = match doc.line_blame(
-        cursor_line as u32,
-        &cx.editor.config().inline_blame.format,
-        cx.editor.now(),
-    ) {
-        Ok(line_blame) => line_blame,
-        Err(err @ (LineBlameError::NotCommittedYet | LineBlameError::NotReadyYet)) => {
-            cx.editor.set_status(err.to_string());
-            return;
-        }
-        Err(err @ LineBlameError::NoFileBlame(_, _)) => {
-            cx.editor.set_error(err.to_string());
-            return;
-        }
-    };
+    let line_blame =
+        match doc.line_blame(cursor_line as u32, &cx.editor.config().inline_blame.format) {
+            Ok(line_blame) => line_blame,
+            Err(err @ (LineBlameError::NotCommittedYet | LineBlameError::NotReadyYet)) => {
+                cx.editor.set_status(err.to_string());
+                return;
+            }
+            Err(err @ LineBlameError::NoFileBlame(_, _)) => {
+                cx.editor.set_error(err.to_string());
+                return;
+            }
+        };
 
     cx.editor.set_status(line_blame);
 }

@@ -209,11 +209,9 @@ impl EditorView {
 
             // do not render inline blame for empty lines to reduce visual noise
             if doc.text().line(cursor_line_idx) != doc.line_ending.as_str() {
-                if let Ok(line_blame) = doc.line_blame(
-                    cursor_line_idx as u32,
-                    &config.inline_blame.format,
-                    editor.now(),
-                ) {
+                if let Ok(line_blame) =
+                    doc.line_blame(cursor_line_idx as u32, &config.inline_blame.format)
+                {
                     decorations.add_decoration(InlineBlame::new(
                         theme,
                         cursor_line_idx,

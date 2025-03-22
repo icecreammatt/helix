@@ -1,8 +1,8 @@
-pub mod date;
 pub mod env;
 pub mod faccess;
 pub mod path;
 pub mod range;
 pub mod rope;
+pub mod time;
 
 pub use range::Range;

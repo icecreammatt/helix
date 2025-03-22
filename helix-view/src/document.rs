@@ -1545,19 +1545,14 @@ impl Document {
     }
 
     /// Get the line blame for this view
-    pub fn line_blame(
-        &self,
-        cursor_line: u32,
-        format: &str,
-        now: SystemTime,
-    ) -> Result<String, LineBlameError> {
+    pub fn line_blame(&self, cursor_line: u32, format: &str) -> Result<String, LineBlameError> {
         Ok(self
             .file_blame
             .as_ref()
             .ok_or(LineBlameError::NotReadyYet)?
             .as_ref()
             .map_err(|err| LineBlameError::NoFileBlame(cursor_line.saturating_add(1), err))?
-            .blame_for_line(cursor_line, self.diff_handle(), now)
+            .blame_for_line(cursor_line, self.diff_handle())
             .ok_or(LineBlameError::NotCommittedYet)?
             .parse_format(format))
     }
