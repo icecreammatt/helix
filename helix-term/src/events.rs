@@ -22,7 +22,6 @@ pub fn register() {
     register_event::<DocumentDidChange>();
     register_event::<DocumentDidClose>();
     register_event::<DocumentFocusLost>();
-    register_event::<DidRequestFileBlameUpdate>();
     register_event::<SelectionDidChange>();
     register_event::<DiagnosticsDidChange>();
     register_event::<LanguageServerInitialized>();

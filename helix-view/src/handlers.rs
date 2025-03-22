@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use completion::{CompletionEvent, CompletionHandler};
 use helix_event::send_blocking;
 use tokio::sync::mpsc::Sender;
@@ -20,7 +18,7 @@ pub enum AutoSaveEvent {
 
 #[derive(Debug)]
 pub struct BlameEvent {
-    pub path: PathBuf,
+    pub path: std::path::PathBuf,
     pub doc_id: DocumentId,
 }
 

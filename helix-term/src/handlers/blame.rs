@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use helix_event::{register_hook, send_blocking};
+use helix_event::register_hook;
 use helix_vcs::FileBlame;
 use helix_view::{
-    events::DidRequestFileBlameUpdate,
+    events::DocumentDidOpen,
     handlers::{BlameEvent, Handlers},
     DocumentId,
 };
@@ -64,25 +64,17 @@ impl helix_event::AsyncHook for BlameHandler {
         }
     }
 }
+
 pub(super) fn register_hooks(handlers: &Handlers) {
     let tx = handlers.blame.clone();
-    register_hook!(move |event: &mut DidRequestFileBlameUpdate<'_>| {
-        let Some(doc) = event.editor.document(event.doc) else {
-            return Ok(());
-        };
-
-        let Some(path) = doc.path() else {
-            return Ok(());
-        };
-
-        send_blocking(
+    register_hook!(move |event: &mut DocumentDidOpen<'_>| {
+        helix_event::send_blocking(
             &tx,
             BlameEvent {
-                path: path.to_path_buf(),
+                path: event.path.to_path_buf(),
                 doc_id: event.doc,
             },
         );
-
         Ok(())
     });
 }

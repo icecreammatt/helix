@@ -10,8 +10,10 @@ use crate::handlers::signature_help::SignatureHelpHandler;
 
 pub use helix_view::handlers::Handlers;
 
+use self::blame::BlameHandler;
+
 mod auto_save;
-mod blame;
+pub mod blame;
 pub mod completion;
 mod diagnostics;
 mod signature_help;
@@ -23,7 +25,7 @@ pub fn setup(config: Arc<ArcSwap<Config>>) -> Handlers {
     let event_tx = completion::CompletionHandler::new(config).spawn();
     let signature_hints = SignatureHelpHandler::new().spawn();
     let auto_save = AutoSaveHandler::new().spawn();
-    let blame = blame::BlameHandler::default().spawn();
+    let blame = BlameHandler::default().spawn();
 
     let handlers = Handlers {
         completions: helix_view::handlers::completion::CompletionHandler::new(event_tx),

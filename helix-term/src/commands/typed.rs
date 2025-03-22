@@ -1,8 +1,8 @@
+use crate::handlers::blame;
+use crate::job::Job;
 use std::fmt::Write;
 use std::io::BufReader;
 use std::ops::{self, Deref};
-
-use crate::job::Job;
 
 use super::*;
 
@@ -10,11 +10,12 @@ use helix_core::command_line::{Args, Flag, Signature, Token, TokenKind};
 use helix_core::fuzzy::fuzzy_match;
 use helix_core::indent::MAX_INDENT;
 use helix_core::line_ending;
+use helix_event::AsyncHook as _;
 use helix_stdx::path::home_dir;
 use helix_view::document::{read_to_string, DEFAULT_LANGUAGE_NAME};
 use helix_view::editor::{CloseError, ConfigEvent};
-use helix_view::events::DidRequestFileBlameUpdate;
 use helix_view::expansion;
+use helix_view::handlers::BlameEvent;
 use serde_json::Value;
 use ui::completers::{self, Completer};
 
@@ -1338,10 +1339,15 @@ fn reload(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyh
             .file_event_handler
             .file_changed(path.clone());
     }
-    helix_event::dispatch(DidRequestFileBlameUpdate {
-        editor: cx.editor,
-        doc: doc_id,
-    });
+    if let Some(path) = doc.path() {
+        helix_event::send_blocking(
+            &blame::BlameHandler::default().spawn(),
+            BlameEvent {
+                path: path.to_path_buf(),
+                doc_id,
+            },
+        );
+    }
     Ok(())
 }
 
@@ -1396,10 +1402,15 @@ fn reload_all(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
             }
         }
 
-        helix_event::dispatch(DidRequestFileBlameUpdate {
-            editor: cx.editor,
-            doc: doc_id,
-        });
+        if let Some(path) = doc.path() {
+            helix_event::send_blocking(
+                &blame::BlameHandler::default().spawn(),
+                BlameEvent {
+                    path: path.to_path_buf(),
+                    doc_id,
+                },
+            );
+        }
     }
 
     Ok(())
