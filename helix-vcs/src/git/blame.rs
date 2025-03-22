@@ -505,7 +505,7 @@ mod test {
     // for tests on Windows.
     // As such it should be fine to disable this test in Windows.
     // As long as these tests pass on other platforms, on Windows it will work too.
-    // #[cfg(not(windows))]
+    #[cfg(not(windows))]
     #[test]
     pub fn blamed_lines() {
         assert_line_blame_progress! {
