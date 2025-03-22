@@ -1,6 +1,5 @@
 use anyhow::Context as _;
 use anyhow::Result;
-use gix::bstr::BStr;
 use helix_core::hashmap;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -107,7 +106,7 @@ impl FileBlame {
     /// Compute blame for this file
     pub fn try_new(file: PathBuf) -> Result<Self> {
         let thread_safe_repo =
-            open_repo(get_repo_dir(&file)?).context("failed to open git repo")?;
+            open_repo(get_repo_dir(&file)?).context("Failed to open git repo")?;
         let repo = thread_safe_repo.to_thread_local();
         let head = repo.head()?.peel_to_commit_in_place()?.id;
 
@@ -124,27 +123,18 @@ impl FileBlame {
         )
         .build()?;
 
-        let relative_path = file
-            .strip_prefix(
-                thread_safe_repo
-                    .path()
-                    .parent()
-                    .context("Could not get parent path of repository")?,
-            )
-            .unwrap_or(&file)
-            .to_str()
-            .context("Could not convert path to string")?;
-
         let mut resource_cache = repo.diff_resource_cache_for_tree_diff()?;
         let file_blame = gix::blame::file(
             &repo.objects,
             traverse.into_iter(),
             &mut resource_cache,
-            // FIXME: gix v0.70 does not account for backslashes in Windows and hard-codes
-            // the `/` as the path separator.
-            // There is a PR to fix that (https://github.com/GitoxideLabs/gitoxide/pull/1905#issue-2939833001)
-            // so we should remove this conversion once we update to a newer Gix version
-            BStr::new(&relative_path.replace('\\', "/")),
+            &gix::path::to_unix_separators_on_windows(gix::path::try_into_bstr(
+                file.strip_prefix(
+                    repo.path()
+                        .parent()
+                        .context("Could not get the parent path of the repo")?,
+                )?,
+            )?),
             None,
         )?
         .entries;
@@ -180,13 +170,14 @@ impl LineBlame {
         let mut content_before_variable = String::new();
 
         let variables = hashmap! {
-        "commit" => &self.commit_hash,
-        "author" => &self.author_name,
-        "date" => &self.commit_date,
-        "message" => &self.commit_message,
-        "email" => &self.author_email,
-        "body" => &self.commit_body,
-        "time-ago" => &self.time_ago        };
+            "commit" => &self.commit_hash,
+            "author" => &self.author_name,
+            "date" => &self.commit_date,
+            "message" => &self.commit_message,
+            "email" => &self.author_email,
+            "body" => &self.commit_body,
+            "time-ago" => &self.time_ago
+        };
 
         let mut chars = format.chars().peekable();
         // in all cases, when any of the variables is empty we exclude the content before the variable
@@ -574,7 +565,7 @@ mod test {
             commit_date: Some("2028-01-10".to_owned()),
             commit_message: Some("feat!: extend house".to_owned()),
             commit_body: Some("BREAKING CHANGE: Removed door".to_owned()),
-            time_ago: Some("BREAKING CHANGE: Removed door".to_owned()),
+            time_ago: None,
         }
     }
 
