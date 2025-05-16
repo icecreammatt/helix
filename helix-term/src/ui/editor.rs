@@ -25,8 +25,9 @@ use helix_core::{
 use helix_view::{
     annotations::diagnostics::DiagnosticFilter,
     document::{Mode, SCRATCH_BUFFER_NAME},
-    editor::{CompleteAction, CursorShapeConfig},
+    editor::{CompleteAction, CursorShapeConfig, InlineBlameBehaviour, InlineBlameConfig},
     graphics::{Color, CursorKind, Modifier, Rect, Style},
+    icons::ICONS,
     input::{KeyEvent, MouseButton, MouseEvent, MouseEventKind},
     keyboard::{KeyCode, KeyModifiers},
     Document, Editor, Theme, View,
@@ -34,6 +35,8 @@ use helix_view::{
 use std::{mem::take, num::NonZeroUsize, ops, path::PathBuf, rc::Rc};
 
 use tui::{buffer::Buffer as Surface, text::Span};
+
+use super::text_decorations::blame::InlineBlame;
 
 pub struct EditorView {
     pub keymaps: Keymaps,
@@ -127,6 +130,18 @@ impl EditorView {
             &text_annotations,
         ));
 
+        if doc
+            .language_config()
+            .and_then(|config| config.rainbow_brackets)
+            .unwrap_or(config.rainbow_brackets)
+        {
+            if let Some(overlay) =
+                Self::doc_rainbow_highlights(doc, view_offset.anchor, inner.height, theme, &loader)
+            {
+                overlays.push(overlay);
+            }
+        }
+
         Self::doc_diagnostics_highlights_into(doc, theme, &mut overlays);
 
         if is_focused {
@@ -160,6 +175,7 @@ impl EditorView {
         }
 
         Self::render_rulers(editor, doc, view, inner, surface, theme);
+        Self::render_inline_blame(&config.inline_blame, doc, view, &mut decorations, theme);
 
         let primary_cursor = doc
             .selection(view.id)
@@ -184,6 +200,7 @@ impl EditorView {
             inline_diagnostic_config,
             config.end_of_line_diagnostics,
         ));
+
         render_document(
             surface,
             inner,
@@ -223,6 +240,61 @@ impl EditorView {
             statusline::RenderContext::new(editor, doc, view, is_focused, &self.spinners);
 
         statusline::render(&mut context, statusline_area, surface);
+    }
+
+    fn render_inline_blame(
+        inline_blame: &InlineBlameConfig,
+        doc: &Document,
+        view: &View,
+        decorations: &mut DecorationManager,
+        theme: &Theme,
+    ) {
+        const INLINE_BLAME_SCOPE: &str = "ui.virtual.inline-blame";
+        let text = doc.text();
+        match inline_blame.behaviour {
+            InlineBlameBehaviour::Hidden => (),
+            InlineBlameBehaviour::CursorLine => {
+                let cursor_line_idx = doc.cursor_line(view.id);
+
+                // do not render inline blame for empty lines to reduce visual noise
+                if text.line(cursor_line_idx) != doc.line_ending.as_str() {
+                    if let Ok(line_blame) =
+                        doc.line_blame(cursor_line_idx as u32, &inline_blame.format)
+                    {
+                        decorations.add_decoration(InlineBlame::new(
+                            theme.get(INLINE_BLAME_SCOPE),
+                            text_decorations::blame::LineBlame::OneLine((
+                                cursor_line_idx,
+                                line_blame,
+                            )),
+                        ));
+                    };
+                }
+            }
+            InlineBlameBehaviour::AllLines => {
+                let mut blame_lines = vec![None; text.len_lines()];
+
+                let blame_for_all_lines = view.line_range(doc).filter_map(|line_idx| {
+                    // do not render inline blame for empty lines to reduce visual noise
+                    if text.line(line_idx) != doc.line_ending.as_str() {
+                        doc.line_blame(line_idx as u32, &inline_blame.format)
+                            .ok()
+                            .map(|blame| (line_idx, blame))
+                    } else {
+                        None
+                    }
+                });
+
+                for (line_idx, blame) in blame_for_all_lines {
+                    blame_lines[line_idx] = Some(blame);
+                }
+
+                decorations.add_decoration(InlineBlame::new(
+                    theme.get(INLINE_BLAME_SCOPE),
+                    text_decorations::blame::LineBlame::ManyLines(blame_lines),
+                ));
+            }
+        }
     }
 
     pub fn render_rulers(
@@ -302,6 +374,27 @@ impl EditorView {
         range = text.byte_to_char(range.start)..text.byte_to_char(range.end);
 
         text_annotations.collect_overlay_highlights(range)
+    }
+
+    pub fn doc_rainbow_highlights(
+        doc: &Document,
+        anchor: usize,
+        height: u16,
+        theme: &Theme,
+        loader: &syntax::Loader,
+    ) -> Option<OverlayHighlights> {
+        let syntax = doc.syntax()?;
+        let text = doc.text().slice(..);
+        let row = text.char_to_line(anchor.min(text.len_chars()));
+        let visible_range = Self::viewport_byte_range(text, row, height);
+        let start = syntax::child_for_byte_range(
+            &syntax.tree().root_node(),
+            visible_range.start as u32..visible_range.end as u32,
+        )
+        .map_or(visible_range.start as u32, |node| node.start_byte());
+        let range = start..visible_range.end as u32;
+
+        Some(syntax.rainbow_highlights(text, theme.rainbow_length(), loader, range))
     }
 
     /// Get highlight spans for document diagnostics
@@ -597,7 +690,19 @@ impl EditorView {
                 bufferline_inactive
             };
 
-            let text = format!(" {}{} ", fname, if doc.is_modified() { "[+]" } else { "" });
+            let icons = ICONS.load();
+
+            let text = if let Some(icon) = icons.mime().get(doc.path(), doc.language_name()) {
+                format!(
+                    " {}  {} {}",
+                    icon.glyph(),
+                    fname,
+                    if doc.is_modified() { "[+] " } else { "" }
+                )
+            } else {
+                format!(" {} {}", fname, if doc.is_modified() { "[+] " } else { "" })
+            };
+
             let used_width = viewport.x.saturating_sub(x);
             let rem_width = surface.area.width.saturating_sub(used_width);
 

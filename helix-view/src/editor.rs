@@ -175,6 +175,49 @@ impl Default for GutterLineNumbersConfig {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum InlineBlameBehaviour {
+    /// Do not show inline blame, and do not request it in the background
+    ///
+    /// When manually requesting the inline blame, it may take several seconds to appear.
+    Hidden,
+    /// Show the inline blame on the cursor line
+    CursorLine,
+    /// Show the inline blame on every other line
+    AllLines,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum InlineBlameCompute {
+    /// Inline blame for a file will be fetched when a document is opened or reloaded, for example
+    Background,
+    /// Inline blame for a file will be fetched when explicitly requested, e.g. when using `space + B`
+    OnDemand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
+pub struct InlineBlameConfig {
+    /// How to show the inline blame
+    pub behaviour: InlineBlameBehaviour,
+    /// Whether the inline blame should be fetched in the background
+    pub compute: InlineBlameCompute,
+    /// How the inline blame should look like and the information it includes
+    pub format: String,
+}
+
+impl Default for InlineBlameConfig {
+    fn default() -> Self {
+        Self {
+            behaviour: InlineBlameBehaviour::Hidden,
+            format: "{author}, {time-ago} • {message} • {commit}".to_owned(),
+            compute: InlineBlameCompute::OnDemand,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct FilePickerConfig {
@@ -373,6 +416,10 @@ pub struct Config {
     /// Whether to read settings from [EditorConfig](https://editorconfig.org) files. Defaults to
     /// `true`.
     pub editor_config: bool,
+    /// Whether to render rainbow colors for matching brackets. Defaults to `false`.
+    pub rainbow_brackets: bool,
+    /// Inline blame allows showing the latest commit that affected the line the cursor is on as virtual text
+    pub inline_blame: InlineBlameConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
@@ -484,12 +531,22 @@ impl Default for LspConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum OptionToml<T> {
+    None,
+    #[serde(untagged)]
+    Some(T),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct SearchConfig {
     /// Smart case: Case insensitive searching unless pattern contains upper case characters. Defaults to true.
     pub smart_case: bool,
     /// Whether the search should wrap after depleting the matches. Default to true.
     pub wrap_around: bool,
+    /// Maximum number of counted matches when searching in a document. `None` means no limit. Default to 100.
+    pub max_matches: OptionToml<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -615,6 +672,9 @@ pub enum StatusLineElement {
 
     /// Indicator for selected register
     Register,
+
+    /// Search index and count
+    SearchPosition,
 }
 
 // Cursor shape is read and used on every rendered frame and so needs
@@ -1023,7 +1083,9 @@ impl Default for Config {
             inline_diagnostics: InlineDiagnosticsConfig::default(),
             end_of_line_diagnostics: DiagnosticFilter::Disable,
             clipboard_provider: ClipboardProvider::default(),
+            inline_blame: InlineBlameConfig::default(),
             editor_config: true,
+            rainbow_brackets: false,
         }
     }
 }
@@ -1033,6 +1095,7 @@ impl Default for SearchConfig {
         Self {
             wrap_around: true,
             smart_case: true,
+            max_matches: OptionToml::Some(100),
         }
     }
 }
@@ -1126,6 +1189,9 @@ pub struct Editor {
 
     pub mouse_down_range: Option<Range>,
     pub cursor_cache: CursorCache,
+
+    /// Stores a manually curated list of document IDs for navigation.
+    pub buffer_jumplist: Vec<DocumentId>,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1248,6 +1314,7 @@ impl Editor {
             handlers,
             mouse_down_range: None,
             cursor_cache: CursorCache::default(),
+            buffer_jumplist: Vec::new(),
         }
     }
 
@@ -1796,11 +1863,13 @@ impl Editor {
             doc.set_version_control_head(self.diff_providers.get_current_head_name(&path));
 
             let id = self.new_document(doc);
+
             self.launch_language_servers(id);
 
             helix_event::dispatch(DocumentDidOpen {
                 editor: self,
                 doc: id,
+                path: &path,
             });
 
             id
@@ -1831,6 +1900,9 @@ impl Editor {
 
         // This will also disallow any follow-up writes
         self.saves.remove(&doc_id);
+
+        // Removes the document from the buffer jumplist when closed.
+        self.buffer_jumplist.retain(|doc| *doc != doc_id);
 
         enum Action {
             Close(ViewId),

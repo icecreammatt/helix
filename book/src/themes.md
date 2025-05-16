@@ -130,6 +130,17 @@ inherits = "boo_berry"
 berry = "#2A2A4D"
 ```
 
+### Rainbow
+
+The `rainbow` key is used for rainbow highlight for matching brackets.
+The key is a list of styles.
+
+```toml
+rainbow = ["#ff0000", "#ffa500", "#fff000", { fg = "#00ff00", modifiers = ["bold"] }]
+```
+
+Colors from the palette and modifiers may be used.
+
 ### Scopes
 
 The following is a list of scopes available to use for styling:
@@ -314,6 +325,7 @@ These scopes are used for theming the editor interface:
 | `ui.virtual.inlay-hint.type`      | Style for inlay hints of kind `type` (language servers are not required to set a kind)         |
 | `ui.virtual.wrap`                 | Soft-wrap indicator (see the [`editor.soft-wrap` config][editor-section])                      |
 | `ui.virtual.jump-label`           | Style for virtual jump labels                                                                  |
+| `ui.virtual.inline-blame`         | Inline blame indicator (see the [`editor.inline-blame` config][editor-section])                |
 | `ui.menu`                         | Code and command completion menus                                                              |
 | `ui.menu.selected`                | Selected autocomplete item                                                                     |
 | `ui.menu.scroll`                  | `fg` sets thumb color, `bg` sets track color of scrollbar                                      |

@@ -43,6 +43,7 @@ use helix_core::{
     ChangeSet, Diagnostic, LineEnding, Range, Rope, RopeBuilder, Selection, Syntax, Transaction,
 };
 
+use crate::editor::InlineBlameCompute;
 use crate::{
     editor::Config,
     events::{DocumentDidChange, SelectionDidChange},
@@ -138,12 +139,28 @@ pub enum DocumentOpenError {
     IoError(#[from] io::Error),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum SearchMatchLimit {
+    Limitless(usize),
+    Limited(usize),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SearchMatch {
+    /// nth match from the beginning of the document.
+    pub idx: usize,
+    /// Total number of matches in the document.
+    pub count: SearchMatchLimit,
+}
+
 pub struct Document {
     pub(crate) id: DocumentId,
     text: Rope,
     selections: HashMap<ViewId, Selection>,
     view_data: HashMap<ViewId, ViewData>,
     pub active_snippet: Option<ActiveSnippet>,
+    /// Current search information.
+    last_search_match: HashMap<ViewId, SearchMatch>,
 
     /// Inlay hints annotations for the document, by view.
     ///
@@ -198,6 +215,10 @@ pub struct Document {
 
     diff_handle: Option<DiffHandle>,
     version_control_head: Option<Arc<ArcSwap<Box<str>>>>,
+    /// Contains blame information for each line in the file
+    /// We store the Result because when we access the blame manually we want to log the error
+    /// But if it is in the background we are just going to ignore the error
+    pub file_blame: Option<anyhow::Result<helix_vcs::FileBlame>>,
 
     // when document was used for most-recent-used buffer picker
     pub focused_at: std::time::Instant,
@@ -214,6 +235,8 @@ pub struct Document {
     // of storing a copy on every doc. Then we can remove the surrounding `Arc` and use the
     // `ArcSwap` directly.
     syn_loader: Arc<ArcSwap<syntax::Loader>>,
+    // when fetching blame on-demand, if this field is `true` we request the blame for this document again
+    pub is_blame_potentially_out_of_date: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -288,6 +311,16 @@ pub struct DocumentInlayHintsId {
     pub first_line: usize,
     /// Last line for which the inlay hints were requested.
     pub last_line: usize,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum LineBlameError<'a> {
+    #[error("Not committed yet")]
+    NotCommittedYet,
+    #[error("Unable to get blame for line {0}: {1}")]
+    NoFileBlame(u32, &'a anyhow::Error),
+    #[error("The blame for this file is not ready yet. Try again in a few seconds")]
+    NotReadyYet,
 }
 
 use std::{fmt, mem};
@@ -701,6 +734,7 @@ impl Document {
             text,
             selections: HashMap::default(),
             inlay_hints: HashMap::default(),
+            last_search_match: HashMap::default(),
             inlay_hints_oudated: false,
             view_data: Default::default(),
             indent_style: DEFAULT_INDENT,
@@ -728,6 +762,16 @@ impl Document {
             color_swatches: None,
             color_swatch_controller: TaskController::new(),
             syn_loader,
+            file_blame: None,
+            is_blame_potentially_out_of_date: false,
+        }
+    }
+
+    pub fn should_request_full_file_blame(&mut self, blame_fetch: InlineBlameCompute) -> bool {
+        if blame_fetch == InlineBlameCompute::OnDemand {
+            self.is_blame_potentially_out_of_date
+        } else {
+            true
         }
     }
 
@@ -1321,6 +1365,8 @@ impl Document {
 
     /// Select text within the [`Document`].
     pub fn set_selection(&mut self, view_id: ViewId, selection: Selection) {
+        self.last_search_match.remove(&view_id);
+
         // TODO: use a transaction?
         self.selections
             .insert(view_id, selection.ensure_invariants(self.text().slice(..)));
@@ -1328,6 +1374,14 @@ impl Document {
             doc: self,
             view: view_id,
         })
+    }
+
+    pub fn set_last_search_match(&mut self, view_id: ViewId, search_match: SearchMatch) {
+        self.last_search_match.insert(view_id, search_match);
+    }
+
+    pub fn get_last_search_match(&self, view_id: ViewId) -> Option<SearchMatch> {
+        self.last_search_match.get(&view_id).copied()
     }
 
     /// Find the origin selection of the text in a document, i.e. where
@@ -1339,6 +1393,13 @@ impl Document {
         }
 
         Range::new(0, 1).grapheme_aligned(self.text().slice(..))
+    }
+
+    /// Get the line of cursor for the primary selection
+    pub fn cursor_line(&self, view_id: ViewId) -> usize {
+        let text = self.text();
+        let selection = self.selection(view_id);
+        text.char_to_line(selection.primary().cursor(text.slice(..)))
     }
 
     /// Reset the view's selection on this document to the
@@ -1570,6 +1631,60 @@ impl Document {
     /// Apply a [`Transaction`] to the [`Document`] to change its text.
     pub fn apply(&mut self, transaction: &Transaction, view_id: ViewId) -> bool {
         self.apply_inner(transaction, view_id, true)
+    }
+
+    /// Get the line blame for this view
+    pub fn line_blame(&self, cursor_line: u32, format: &str) -> Result<String, LineBlameError> {
+        // how many lines were inserted and deleted before the cursor line
+        let (inserted_lines, deleted_lines) = self
+            .diff_handle()
+            .map_or(
+                // in theory there can be situations where we don't have the diff for a file
+                // but we have the blame. In this case, we can just act like there is no diff
+                Some((0, 0)),
+                |diff_handle| {
+                    // Compute the amount of lines inserted and deleted before the `line`
+                    // This information is needed to accurately transform the state of the
+                    // file in the file system into what gix::blame knows about (gix::blame only
+                    // knows about commit history, it does not know about uncommitted changes)
+                    diff_handle
+                        .try_load()?
+                        .hunks_intersecting_line_ranges(std::iter::once((0, cursor_line as usize)))
+                        .try_fold(
+                            (0, 0),
+                            |(total_inserted_lines, total_deleted_lines), hunk| {
+                                // check if the line intersects the hunk's `after` (which represents
+                                // inserted lines)
+                                (hunk.after.start > cursor_line || hunk.after.end <= cursor_line)
+                                    .then_some((
+                                        total_inserted_lines + (hunk.after.end - hunk.after.start),
+                                        total_deleted_lines + (hunk.before.end - hunk.before.start),
+                                    ))
+                            },
+                        )
+                },
+            )
+            .ok_or(LineBlameError::NotCommittedYet)?;
+
+        let file_blame = match &self.file_blame {
+            None => return Err(LineBlameError::NotReadyYet),
+            Some(result) => match result {
+                Err(err) => {
+                    return Err(LineBlameError::NoFileBlame(
+                        // convert 0-based line into 1-based line
+                        cursor_line.saturating_add(1),
+                        err,
+                    ));
+                }
+                Ok(file_blame) => file_blame,
+            },
+        };
+
+        let line_blame = file_blame
+            .blame_for_line(cursor_line, inserted_lines, deleted_lines)
+            .parse_format(format);
+
+        Ok(line_blame)
     }
 
     /// Apply a [`Transaction`] to the [`Document`] to change its text
