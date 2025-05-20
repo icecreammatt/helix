@@ -27,6 +27,7 @@ use helix_view::{
     document::{Mode, SCRATCH_BUFFER_NAME},
     editor::{CompleteAction, CursorShapeConfig},
     graphics::{Color, CursorKind, Modifier, Rect, Style},
+    icons::ICONS,
     input::{KeyEvent, MouseButton, MouseEvent, MouseEventKind},
     keyboard::{KeyCode, KeyModifiers},
     Document, Editor, Theme, View,
@@ -126,6 +127,18 @@ impl EditorView {
             inner.height,
             &text_annotations,
         ));
+
+        if doc
+            .language_config()
+            .and_then(|config| config.rainbow_brackets)
+            .unwrap_or(config.rainbow_brackets)
+        {
+            if let Some(overlay) =
+                Self::doc_rainbow_highlights(doc, view_offset.anchor, inner.height, theme, &loader)
+            {
+                overlays.push(overlay);
+            }
+        }
 
         Self::doc_diagnostics_highlights_into(doc, theme, &mut overlays);
 
@@ -302,6 +315,27 @@ impl EditorView {
         range = text.byte_to_char(range.start)..text.byte_to_char(range.end);
 
         text_annotations.collect_overlay_highlights(range)
+    }
+
+    pub fn doc_rainbow_highlights(
+        doc: &Document,
+        anchor: usize,
+        height: u16,
+        theme: &Theme,
+        loader: &syntax::Loader,
+    ) -> Option<OverlayHighlights> {
+        let syntax = doc.syntax()?;
+        let text = doc.text().slice(..);
+        let row = text.char_to_line(anchor.min(text.len_chars()));
+        let visible_range = Self::viewport_byte_range(text, row, height);
+        let start = syntax::child_for_byte_range(
+            &syntax.tree().root_node(),
+            visible_range.start as u32..visible_range.end as u32,
+        )
+        .map_or(visible_range.start as u32, |node| node.start_byte());
+        let range = start..visible_range.end as u32;
+
+        Some(syntax.rainbow_highlights(text, theme.rainbow_length(), loader, range))
     }
 
     /// Get highlight spans for document diagnostics
@@ -597,7 +631,19 @@ impl EditorView {
                 bufferline_inactive
             };
 
-            let text = format!(" {}{} ", fname, if doc.is_modified() { "[+]" } else { "" });
+            let icons = ICONS.load();
+
+            let text = if let Some(icon) = icons.mime().get(doc.path(), doc.language_name()) {
+                format!(
+                    " {}  {} {}",
+                    icon.glyph(),
+                    fname,
+                    if doc.is_modified() { "[+] " } else { "" }
+                )
+            } else {
+                format!(" {} {}", fname, if doc.is_modified() { "[+] " } else { "" })
+            };
+
             let used_width = viewport.x.saturating_sub(x);
             let rem_width = surface.area.width.saturating_sub(used_width);
 

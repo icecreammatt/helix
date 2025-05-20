@@ -373,6 +373,8 @@ pub struct Config {
     /// Whether to read settings from [EditorConfig](https://editorconfig.org) files. Defaults to
     /// `true`.
     pub editor_config: bool,
+    /// Whether to render rainbow colors for matching brackets. Defaults to `false`.
+    pub rainbow_brackets: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
@@ -484,12 +486,22 @@ impl Default for LspConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum OptionToml<T> {
+    None,
+    #[serde(untagged)]
+    Some(T),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct SearchConfig {
     /// Smart case: Case insensitive searching unless pattern contains upper case characters. Defaults to true.
     pub smart_case: bool,
     /// Whether the search should wrap after depleting the matches. Default to true.
     pub wrap_around: bool,
+    /// Maximum number of counted matches when searching in a document. `None` means no limit. Default to 100.
+    pub max_matches: OptionToml<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -615,6 +627,9 @@ pub enum StatusLineElement {
 
     /// Indicator for selected register
     Register,
+
+    /// Search index and count
+    SearchPosition,
 }
 
 // Cursor shape is read and used on every rendered frame and so needs
@@ -1024,6 +1039,7 @@ impl Default for Config {
             end_of_line_diagnostics: DiagnosticFilter::Disable,
             clipboard_provider: ClipboardProvider::default(),
             editor_config: true,
+            rainbow_brackets: false,
         }
     }
 }
@@ -1033,6 +1049,7 @@ impl Default for SearchConfig {
         Self {
             wrap_around: true,
             smart_case: true,
+            max_matches: OptionToml::Some(100),
         }
     }
 }
@@ -1126,6 +1143,9 @@ pub struct Editor {
 
     pub mouse_down_range: Option<Range>,
     pub cursor_cache: CursorCache,
+
+    /// Stores a manually curated list of document IDs for navigation.
+    pub buffer_jumplist: Vec<DocumentId>,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1248,6 +1268,7 @@ impl Editor {
             handlers,
             mouse_down_range: None,
             cursor_cache: CursorCache::default(),
+            buffer_jumplist: Vec::new(),
         }
     }
 
@@ -1831,6 +1852,9 @@ impl Editor {
 
         // This will also disallow any follow-up writes
         self.saves.remove(&doc_id);
+
+        // Removes the document from the buffer jumplist when closed.
+        self.buffer_jumplist.retain(|doc| *doc != doc_id);
 
         enum Action {
             Close(ViewId),

@@ -61,6 +61,7 @@
 | `end-of-line-diagnostics` | Minimum severity of diagnostics to render at the end of the line. Set to `disable` to disable entirely. Refer to the setting about `inline-diagnostics` for more details | "disable"
 | `clipboard-provider` | Which API to use for clipboard interaction. One of `pasteboard` (MacOS), `wayland`, `x-clip`, `x-sel`, `win-32-yank`, `termux`, `tmux`, `windows`, `termcode`, `none`, or a custom command set. | Platform and environment specific. |
 | `editor-config` | Whether to read settings from [EditorConfig](https://editorconfig.org) files | `true` |
+| `rainbow-brackets` | Whether to render rainbow colors for matching brackets. Requires tree-sitter `rainbows.scm` queries for the language. | `false` |
 
 ### `[editor.clipboard-provider]` Section
 
@@ -139,6 +140,7 @@ The following statusline elements can be configured:
 | `diagnostics` | The number of warnings and/or errors |
 | `workspace-diagnostics` | The number of warnings and/or errors on workspace |
 | `selections` | The primary selection index out of the number of active selections |
+| `search-position` | Current search match and total matches in the view `[<current>/<total>]` |
 | `primary-selection-length` | The number of characters currently in primary selection |
 | `position` | The cursor position |
 | `position-percentage` | The cursor position as a percentage of the total number of lines |
@@ -279,6 +281,7 @@ Search specific options.
 |--|--|---------|
 | `smart-case` | Enable smart case regex searching (case-insensitive unless pattern contains upper case characters) | `true` |
 | `wrap-around`| Whether the search should wrap after depleting the matches | `true` |
+| `max-matches`| Maximum number of matches that will be counted for the denominator of `search-position`. Possible values are integers or `"none"` for no limit. | `100` |
 
 ### `[editor.whitespace]` Section
 
